@@ -2,6 +2,7 @@
 """
 from pysph.examples.gas_dynamics.shocktube_setup import ShockTubeSetup
 from pysph.sph.scheme import ADKEScheme, GasDScheme, GSPHScheme, SchemeChooser
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 from pysph.sph.wc.crksph import CRKSPHScheme
 from pysph.base.nnps import DomainManager
 
@@ -42,10 +43,10 @@ class SodShockTube(ShockTubeSetup):
     def consume_user_options(self):
         self.nl = self.options.nl
         self.hdx = self.options.hdx
-        ratio = self.rhor/self.rhol
-        self.nr = self.nl*ratio
-        self.dxl = 0.5/self.nl
-        self.dxr = 0.5/self.nr
+        ratio = self.rhor / self.rhol
+        self.nr = self.nl * ratio
+        self.dxl = 0.5 / self.nl
+        self.dxr = 0.5 / self.nr
         self.ml = self.dxl * self.rhol
         self.h0 = self.hdx * self.dxr
         self.hdx = self.hdx
@@ -70,9 +71,13 @@ class SodShockTube(ShockTubeSetup):
         )
 
     def configure_scheme(self):
+        from pysph.base.kernels import CubicSpline
         scheme = self.scheme
         if self.options.scheme in ['gsph', 'mpm']:
             scheme.configure(kernel_factor=self.hdx)
+        elif self.options.scheme == 'cullendehnen':
+            scheme.configure(m=self.ml, Nh=4.0 * self.hdx)
+            scheme.configure_solver(kernel=CubicSpline(dim=dim))
         scheme.configure_solver(tf=self.tf, dt=self.dt)
 
     def create_scheme(self):
@@ -96,9 +101,14 @@ class SodShockTube(ShockTubeSetup):
             fluids=['fluid'], dim=dim, rho0=0, c0=0,
             nu=0, h0=0, p0=0, gamma=gamma, cl=3
         )
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
+            l=0.05, alphamax=2.0, b=0.5, has_ghosts=True
+        )
         s = SchemeChooser(
-            default='adke', adke=adke, mpm=mpm, gsph=gsph, crk=crk
-            )
+            default='adke', adke=adke, mpm=mpm, gsph=gsph, crk=crk,
+            cullendehnen=cullendehnen
+        )
         return s
 
 
