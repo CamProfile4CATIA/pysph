@@ -451,7 +451,7 @@ class AdaptIndividualViscosity(Equation):
         if d_alpha[d_idx] < d_alphaloc[d_idx]:
             d_alpha[d_idx] = d_alphaloc[d_idx]
         else:
-            d_alphaloc[d_idx] = ((d_alphaloc[d_idx] +
+            d_alpha[d_idx] = ((d_alphaloc[d_idx] +
                                   (d_alpha[d_idx] - d_alphaloc[d_idx]) *
                                   exp(-dt / d_tau[d_idx])))
 
