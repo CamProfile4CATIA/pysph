@@ -29,7 +29,6 @@ class Factorf(Equation):
         d_f[d_idx] = 0.0
 
     def loop(self, d_idx, RIJ, WDASHI, s_m, s_idx, d_f, d_h, d_hnu):
-
         if RIJ > 1e-12:
             qi = RIJ / d_h[d_idx]
             tilwij = WDASHI * d_hnu[d_idx] / qi
@@ -46,16 +45,14 @@ class AdjustSmoothingLength(Equation):
         self.dim = dim
         super().__init__(dest, sources)
 
-    def initialize(self, d_idx, d_ftil, d_h):
-        d_ftil[d_idx] = 0.0  # proxy for numerator in loop
-
     def post_loop(self, d_idx, d_f, d_rho, d_h, d_ftil, d_m, SPH_KERNEL,
                   d_hnurho, d_hnu, WI):
         dim = self.dim
         Mh = self.Mh
 
         if d_hnurho[d_idx] < Mh:
-            wo = WI * d_hnu[d_idx]
+            wo = SPH_KERNEL.kernel(xij=[0.0, 0.0, 0.0], rij=0.0,
+                                   h=d_h[d_idx]) * d_hnu[d_idx]
             d_ftil[d_idx] = (d_f[d_idx] * (d_hnurho[d_idx] - d_m[d_idx] * wo) /
                              d_hnurho[d_idx])
             pw = d_ftil[d_idx] / dim
@@ -80,7 +77,6 @@ class SmoothingLengthRate(Equation):
 
     def loop(self, d_idx, s_idx, d_h, RIJ, s_m, VIJ, XIJ, d_ah,
              d_ahden, R2IJ, WDASHI, d_hnu):
-
         if RIJ > 1e-12:
             vijdotxij = VIJ[0] * XIJ[0] + VIJ[1] * XIJ[1] + VIJ[2] * XIJ[2]
             qi = RIJ / d_h[d_idx]
@@ -135,30 +131,31 @@ class VelocityGradient(Equation):
         if RIJ > 1e-12:
             qi = RIJ / d_h[d_idx]
             tilwij = WDASHI * d_hnu[d_idx] / qi
+            barwij = Vb * tilwij
 
-            d_D00[d_idx] -= Vb * VIJ[0] * XIJ[0] * tilwij
-            d_D01[d_idx] -= Vb * VIJ[0] * XIJ[1] * tilwij
-            d_D02[d_idx] -= Vb * VIJ[0] * XIJ[2] * tilwij
+            d_D00[d_idx] -= VIJ[0] * XIJ[0] * barwij
+            d_D01[d_idx] -= VIJ[0] * XIJ[1] * barwij
+            d_D02[d_idx] -= VIJ[0] * XIJ[2] * barwij
 
-            d_D10[d_idx] -= Vb * VIJ[1] * XIJ[0] * tilwij
-            d_D11[d_idx] -= Vb * VIJ[1] * XIJ[1] * tilwij
-            d_D12[d_idx] -= Vb * VIJ[1] * XIJ[2] * tilwij
+            d_D10[d_idx] -= VIJ[1] * XIJ[0] * barwij
+            d_D11[d_idx] -= VIJ[1] * XIJ[1] * barwij
+            d_D12[d_idx] -= VIJ[1] * XIJ[2] * barwij
 
-            d_D20[d_idx] -= Vb * VIJ[2] * XIJ[0] * tilwij
-            d_D21[d_idx] -= Vb * VIJ[2] * XIJ[1] * tilwij
-            d_D22[d_idx] -= Vb * VIJ[2] * XIJ[2] * tilwij
+            d_D20[d_idx] -= VIJ[2] * XIJ[0] * barwij
+            d_D21[d_idx] -= VIJ[2] * XIJ[1] * barwij
+            d_D22[d_idx] -= VIJ[2] * XIJ[2] * barwij
 
-            d_invT00[d_idx] -= Vb * XIJ[0] * XIJ[0] * tilwij
-            d_invT01[d_idx] -= Vb * XIJ[0] * XIJ[1] * tilwij
-            d_invT02[d_idx] -= Vb * XIJ[0] * XIJ[2] * tilwij
+            d_invT00[d_idx] -= XIJ[0] * XIJ[0] * barwij
+            d_invT01[d_idx] -= XIJ[0] * XIJ[1] * barwij
+            d_invT02[d_idx] -= XIJ[0] * XIJ[2] * barwij
 
-            d_invT10[d_idx] -= Vb * XIJ[1] * XIJ[0] * tilwij
-            d_invT11[d_idx] -= Vb * XIJ[1] * XIJ[1] * tilwij
-            d_invT12[d_idx] -= Vb * XIJ[1] * XIJ[2] * tilwij
+            d_invT10[d_idx] -= XIJ[1] * XIJ[0] * barwij
+            d_invT11[d_idx] -= XIJ[1] * XIJ[1] * barwij
+            d_invT12[d_idx] -= XIJ[1] * XIJ[2] * barwij
 
-            d_invT20[d_idx] -= Vb * XIJ[2] * XIJ[0] * tilwij
-            d_invT21[d_idx] -= Vb * XIJ[2] * XIJ[1] * tilwij
-            d_invT22[d_idx] -= Vb * XIJ[2] * XIJ[2] * tilwij
+            d_invT20[d_idx] -= XIJ[2] * XIJ[0] * barwij
+            d_invT21[d_idx] -= XIJ[2] * XIJ[1] * barwij
+            d_invT22[d_idx] -= XIJ[2] * XIJ[2] * barwij
 
     def post_loop(
             self, d_idx, d_invT00, d_invT01, d_invT02, d_invT10, d_invT11,
@@ -184,8 +181,8 @@ class VelocityGradient(Equation):
         elif self.dim == 2:
             T22 = 1.0
 
-        det = T00 * T11 * T22 - T00 * T12 * T21 - T01 * T10 * T22 + \
-            T01 * T12 * T20 + T02 * T10 * T21 - T02 * T11 * T20
+        det = (T00 * T11 * T22 - T00 * T12 * T21 - T01 * T10 * T22 +
+               T01 * T12 * T20 + T02 * T10 * T21 - T02 * T11 * T20)
 
         d_invT00[d_idx] = (T11 * T22 - T12 * T21) / det
         d_invT01[d_idx] = (T10 * T22 - T12 * T20) / det
@@ -258,21 +255,22 @@ class AcclerationGradient(Equation):
         if RIJ > 1e-12:
             qi = RIJ / d_h[d_idx]
             tilwij = WDASHI * d_hnu[d_idx] / qi
+            barwij = Vb * tilwij
 
             auij = d_au[d_idx] - s_au[s_idx]
-            d_DD00[d_idx] -= Vb * auij * XIJ[0] * tilwij
-            d_DD01[d_idx] -= Vb * auij * XIJ[1] * tilwij
-            d_DD02[d_idx] -= Vb * auij * XIJ[2] * tilwij
+            d_DD00[d_idx] -= auij * XIJ[0] * barwij
+            d_DD01[d_idx] -= auij * XIJ[1] * barwij
+            d_DD02[d_idx] -= auij * XIJ[2] * barwij
 
             avij = d_av[d_idx] - s_av[s_idx]
-            d_DD10[d_idx] -= Vb * avij * XIJ[0] * tilwij
-            d_DD11[d_idx] -= Vb * avij * XIJ[1] * tilwij
-            d_DD12[d_idx] -= Vb * avij * XIJ[2] * tilwij
+            d_DD10[d_idx] -= avij * XIJ[0] * barwij
+            d_DD11[d_idx] -= avij * XIJ[1] * barwij
+            d_DD12[d_idx] -= avij * XIJ[2] * barwij
 
             awij = d_aw[d_idx] - s_aw[s_idx]
-            d_DD20[d_idx] -= Vb * awij * XIJ[0] * tilwij
-            d_DD21[d_idx] -= Vb * awij * XIJ[1] * tilwij
-            d_DD22[d_idx] -= Vb * awij * XIJ[2] * tilwij
+            d_DD20[d_idx] -= awij * XIJ[0] * barwij
+            d_DD21[d_idx] -= awij * XIJ[1] * barwij
+            d_DD22[d_idx] -= awij * XIJ[2] * barwij
 
     def post_loop(self, d_idx, d_invT00, d_invT01, d_invT02, d_invT10,
                   d_invT11, d_invT12, d_invT20, d_invT21, d_invT22, d_DD00,
@@ -404,11 +402,11 @@ class FalseDetectionSuppressingLimiterXi(Equation):
         num *= num
 
         # trace(S \cdot S^t)
-        trSdtSt = (d_S00[d_idx] ** 2 + d_S10[d_idx] ** 2 + d_S20[d_idx] ** 2 +
+        trSdotSt = (d_S00[d_idx] ** 2 + d_S10[d_idx] ** 2 + d_S20[d_idx] ** 2 +
                    d_S10[d_idx] ** 2 + d_S11[d_idx] ** 2 + d_S21[d_idx] ** 2 +
                    d_S20[d_idx] ** 2 + d_S21[d_idx] ** 2 + d_S22[d_idx] ** 2)
 
-        den = num + trSdtSt
+        den = num + trSdotSt
 
         if den == 0:
             d_xi[d_idx] = 0.0
@@ -452,8 +450,8 @@ class AdaptIndividualViscosity(Equation):
             d_alpha[d_idx] = d_alphaloc[d_idx]
         else:
             d_alpha[d_idx] = ((d_alphaloc[d_idx] +
-                                  (d_alpha[d_idx] - d_alphaloc[d_idx]) *
-                                  exp(-dt / d_tau[d_idx])))
+                               (d_alpha[d_idx] - d_alphaloc[d_idx]) *
+                               exp(-dt / d_tau[d_idx])))
 
 
 class UpdateGhostProps(Equation):
@@ -486,7 +484,6 @@ class MomentumAndEnergy(Equation):
     def loop(self, d_idx, s_idx, d_rho, d_p, s_rho, s_p, d_au, d_av,
              d_aw, VIJ, d_ae, XIJ, d_h, RIJ, s_h, d_f,
              s_f, d_hnurho, s_hnurho, d_m, WDASHI, d_hnu, WDASHJ, s_hnu):
-
         if RIJ > 1e-12:
             qi = RIJ / d_h[d_idx]
             qj = RIJ / s_h[s_idx]
