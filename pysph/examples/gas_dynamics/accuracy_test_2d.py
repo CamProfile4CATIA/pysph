@@ -13,6 +13,7 @@ from pysph.solver.application import Application
 
 from pysph.sph.scheme import GasDScheme, ADKEScheme, GSPHScheme, SchemeChooser
 from pysph.sph.wc.crksph import CRKSPHScheme
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 
 # PySPH tools
 from pysph.tools import uniform_distribution as ud
@@ -26,13 +27,11 @@ gamma1 = gamma - 1.0
 dt = 5e-3
 tf = 1.
 
-
 # domain size
 xmin = 0.
 xmax = 1.
 ymin = 0.
 ymax = 1.
-
 
 # scheme constants
 alpha1 = 1.0
@@ -56,6 +55,17 @@ class AccuracyTest2D(Application):
         self.v = -1
         self.c_0 = 1.18
         self.cfl = 0.1
+        global dx
+        data = ud.uniform_distribution_cubic2D(
+            self.dx, xmin, xmax, ymin, ymax
+        )
+
+        self.x = data[0].ravel()
+        self.y = data[1].ravel()
+        dx = data[2]
+
+        self.volume = dx * dx
+        self.rho = 1 + 0.2 * numpy.sin(numpy.pi * (self.x + self.y))
 
     def add_user_options(self, group):
         group.add_argument(
@@ -75,20 +85,16 @@ class AccuracyTest2D(Application):
             periodic_in_x=True, periodic_in_y=True)
 
     def create_particles(self):
-        global dx
         data = ud.uniform_distribution_cubic2D(
             self.dx, xmin, xmax, ymin, ymax
-            )
+        )
 
-        x = data[0].ravel()
-        y = data[1].ravel()
-        dx = data[2]
+        x = self.x
+        y = self.y
 
         volume = dx * dx
 
-        rho = 1 + 0.2 * numpy.sin(
-            numpy.pi * (x + y)
-        )
+        rho = self.rho
 
         p = numpy.ones_like(x) * self.p
 
@@ -103,7 +109,7 @@ class AccuracyTest2D(Application):
         v = numpy.ones_like(x) * self.v
 
         # thermal energy from the ideal gas EOS
-        e = p/(gamma1*rho)
+        e = p / (gamma1 * rho)
 
         fluid = gpa(name='fluid', x=x, y=y, rho=rho, p=p, e=e, h=h, m=m,
                     h0=h.copy(), u=u, v=v)
@@ -140,8 +146,14 @@ class AccuracyTest2D(Application):
             niter=40, tol=1e-6, has_ghosts=True
         )
 
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
+            l=0.1, alphamax=2.0, b=1.0, has_ghosts=True
+        )
+
         s = SchemeChooser(
-            default='gsph', adke=adke, mpm=mpm, gsph=gsph, crksph=crksph
+            default='adke', adke=adke, mpm=mpm, gsph=gsph, crksph=crksph,
+            cullendehnen=cullendehnen
         )
         return s
 
@@ -158,6 +170,15 @@ class AccuracyTest2D(Application):
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
         elif self.options.scheme == 'crksph':
+            s.configure_solver(dt=self.dt, tf=self.tf,
+                               adaptive_timestep=False, pfreq=50)
+        elif self.options.scheme == 'cullendehnen':
+            h = 4.0 * self.hdx * self.dx
+            s.configure(Mh=max(self.rho) * h ** dim)
+            # h = 3.0 * self.hdx * self.dxl would have been ideal
+            # because default Gaussian Kernel has radius scale = 3.0.
+            # But apparently, this seems to cause instability in
+            # eq AdjustSmoothingLength. So, using h = 4.0 * self.hdx * self.dx
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
 
