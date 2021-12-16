@@ -76,8 +76,9 @@ class SodShockTube(ShockTubeSetup):
         if self.options.scheme in ['gsph', 'mpm']:
             scheme.configure(kernel_factor=self.hdx)
         elif self.options.scheme == 'cullendehnen':
-            scheme.configure(m=self.ml, Nh=4.0 * self.hdx)
-            scheme.configure_solver(kernel=CubicSpline(dim=dim))
+            scheme.configure(Mh=self.rhol * (3.0*self.hdx*self.dxl)**dim)
+            # 3.0 * self.hdx * self.dxl because default Gaussian Kernel
+            # has radius scale = 3.0
         scheme.configure_solver(tf=self.tf, dt=self.dt)
 
     def create_scheme(self):
@@ -103,7 +104,7 @@ class SodShockTube(ShockTubeSetup):
         )
         cullendehnen = CullenDehnenScheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            l=0.05, alphamax=2.0, b=0.5, has_ghosts=True
+            l=0.1, alphamax=2.0, b=1.0, has_ghosts=True
         )
         s = SchemeChooser(
             default='adke', adke=adke, mpm=mpm, gsph=gsph, crk=crk,
