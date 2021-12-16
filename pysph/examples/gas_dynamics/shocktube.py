@@ -16,6 +16,7 @@ from pysph.solver.application import Application
 
 from pysph.sph.scheme import GasDScheme, ADKEScheme, GSPHScheme, SchemeChooser
 from pysph.sph.wc.crksph import CRKSPHScheme
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 
 # PySPH tools
 from pysph.tools import uniform_distribution as ud
@@ -28,7 +29,6 @@ gamma1 = gamma - 1.0
 # solution parameters
 dt = 7.5e-6
 tf = 0.005
-
 
 # domain size
 xmin = 0.
@@ -107,7 +107,7 @@ class ShockTube2D(Application):
         v[right_indices] = self.vr
 
         # thermal energy from the ideal gas EOS
-        e = p/(gamma1*rho)
+        e = p / (gamma1 * rho)
 
         fluid = gpa(name='fluid', x=x, y=y, rho=rho, p=p, e=e, h=h, m=m,
                     h0=h.copy(), u=u, v=v)
@@ -147,8 +147,14 @@ class ShockTube2D(Application):
             gamma=gamma, cl=2, has_ghosts=True
         )
 
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
+            l=0.1, alphamax=2.0, b=1.0, has_ghosts=True
+        )
+
         s = SchemeChooser(
-            default='adke', adke=adke, mpm=mpm, gsph=gsph, crksph=crksph
+            default='adke', adke=adke, mpm=mpm, gsph=gsph, crksph=crksph,
+            cullendehnen=cullendehnen
         )
         return s
 
@@ -167,6 +173,14 @@ class ShockTube2D(Application):
         elif self.options.scheme == 'crksph':
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
+        elif self.options.scheme == 'cullendehnen':
+            h = 4.0 * self.hdx * self.dx
+            s.configure(Mh=self.rhol * h ** dim)
+            # h = 3.0 * self.hdx * self.dxl would have been ideal
+            # because default Gaussian Kernel has radius scale = 3.0.
+            # But apparently, this seems to cause instability in
+            # eq AdjustSmoothingLength. So, using h = 4.0 * self.hdx * self.dx
+            s.configure_solver(dt=self.dt, tf=self.tf, pfreq=50)
 
     def post_process(self):
         try:
@@ -209,7 +223,7 @@ class ShockTube2D(Application):
         pyplot.scatter(
             x, rho, label='pysph (' + str(self.options.scheme) + ')',
             s=1, color='k'
-            )
+        )
         pyplot.plot(x_e, rho_e, label='exact')
         pyplot.xlim((0.2, 0.8))
         pyplot.xlabel('x')
@@ -222,7 +236,7 @@ class ShockTube2D(Application):
         pyplot.scatter(
             x, e, label='pysph (' + str(self.options.scheme) + ')',
             s=1, color='k'
-            )
+        )
         pyplot.plot(x_e, e_e, label='exact')
         pyplot.xlim((0.2, 0.8))
         pyplot.xlabel('x')
@@ -235,7 +249,7 @@ class ShockTube2D(Application):
         pyplot.scatter(
             x, rho * u, label='pysph (' + str(self.options.scheme) + ')',
             s=1, color='k'
-            )
+        )
         pyplot.plot(x_e, rho_e * u_e, label='exact')
         pyplot.xlim((0.2, 0.8))
         pyplot.xlabel('x')
@@ -248,7 +262,7 @@ class ShockTube2D(Application):
         pyplot.scatter(
             x, p, label='pysph (' + str(self.options.scheme) + ')',
             s=1, color='k'
-            )
+        )
         pyplot.plot(x_e, p_e, label='exact')
         pyplot.xlim((0.2, 0.8))
         pyplot.xlabel('x')
