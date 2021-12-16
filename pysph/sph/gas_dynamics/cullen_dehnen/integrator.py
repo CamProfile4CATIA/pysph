@@ -1,5 +1,6 @@
 from pysph.sph.integrator import Integrator
 from pysph.sph.integrator_step import IntegratorStep
+from math import exp
 
 
 class KickDriftKickStep(IntegratorStep):
