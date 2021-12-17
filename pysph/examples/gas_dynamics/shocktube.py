@@ -174,8 +174,8 @@ class ShockTube2D(Application):
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
         elif self.options.scheme == 'cullendehnen':
-            h = 4.0 * self.hdx * self.dx
-            s.configure(Mh=self.rhol * h ** dim)
+            self.hdx = 4.0 * self.hdx
+            s.configure(Mh=self.rhol * (self.hdx*self.dx) ** dim)
             # h = 3.0 * self.hdx * self.dxl would have been ideal
             # because default Gaussian Kernel has radius scale = 3.0.
             # But apparently, this seems to cause instability in

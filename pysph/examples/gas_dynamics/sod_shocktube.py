@@ -76,7 +76,8 @@ class SodShockTube(ShockTubeSetup):
         if self.options.scheme in ['gsph', 'mpm']:
             scheme.configure(kernel_factor=self.hdx)
         elif self.options.scheme == 'cullendehnen':
-            scheme.configure(Mh=self.rhol * (3.0*self.hdx*self.dxl)**dim)
+            self.hdx = 3.0 * self.hdx
+            scheme.configure(Mh=self.rhol * (self.hdx*self.dxl)**dim)
             # 3.0 * self.hdx * self.dxl because default Gaussian Kernel
             # has radius scale = 3.0
         scheme.configure_solver(tf=self.tf, dt=self.dt)
