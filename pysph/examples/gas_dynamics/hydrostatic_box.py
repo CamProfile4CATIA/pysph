@@ -8,6 +8,7 @@ from pysph.sph.wc.crksph import CRKSPHScheme
 from pysph.sph.scheme import (
     ADKEScheme, SchemeChooser, GasDScheme, GSPHScheme
 )
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 from pysph.base.utils import get_particle_array as gpa
 from pysph.base.nnps import DomainManager
 from pysph.solver.application import Application
@@ -84,9 +85,15 @@ class HydrostaticBox(Application):
         adke = ADKEScheme(
             fluids=['fluid'], solids=[], dim=2, gamma=self.gamma,
             alpha=0.1, beta=0.1, k=1.5, eps=0., g1=0.1, g2=0.1,
-            has_ghosts=True)
+            has_ghosts=True
+        )
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=[], dim=2, gamma=self.gamma,
+            l=0.1, alphamax=2.0, b=0.1, has_ghosts=True
+        )
         s = SchemeChooser(
-            default='crksph', crksph=crk, adke=adke, mpm=mpm, gsph=gsph
+            default='adke', adke=adke, mpm=mpm, gsph=gsph,
+            cullendehnen=cullendehnen
         )
         return s
 
@@ -108,6 +115,11 @@ class HydrostaticBox(Application):
         elif self.options.scheme == 'adke':
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
+        elif self.options.scheme == 'cullendehnen':
+            from pysph.base.kernels import Gaussian
+            s.configure(Mh=self.rhoi * (0.5 * self.hdx * self.dx) ** 2)
+            s.configure_solver(dt=self.dt, tf=self.tf,
+                               adaptive_timestep=False, pfreq=50, kernel=Gaussian(dim=2))
 
 
 if __name__ == "__main__":

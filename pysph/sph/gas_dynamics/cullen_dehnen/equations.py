@@ -1,6 +1,7 @@
 from pysph.sph.equation import Equation
-from math import exp
+from math import exp, sqrt
 from pysph.base.particle_array import get_ghost_tag
+
 GHOST_TAG = get_ghost_tag()
 
 
@@ -353,13 +354,14 @@ class ShockIndicatorR(Equation):
 class EOS(Equation):
     def __init__(self, dest, sources, gamma):
         self.gamma = gamma
+        self.gammam1 = gamma - 1.0
         super().__init__(dest, sources)
 
     def initialize(self, d_idx, d_rho, d_p, d_e, d_cs):
         gamma = self.gamma
-        gammam1 = gamma - 1
+        gammam1 = self.gammam1
         d_p[d_idx] = gammam1 * d_e[d_idx] * d_rho[d_idx]
-        d_cs[d_idx] = (gamma * d_p[d_idx] / d_rho[d_idx]) ** 0.5
+        d_cs[d_idx] = sqrt(gamma * d_p[d_idx] / d_rho[d_idx])
 
 
 class SignalVelocity(Equation):
@@ -403,8 +405,8 @@ class FalseDetectionSuppressingLimiterXi(Equation):
 
         # trace(S \cdot S^t)
         trSdotSt = (d_S00[d_idx] ** 2 + d_S10[d_idx] ** 2 + d_S20[d_idx] ** 2 +
-                   d_S10[d_idx] ** 2 + d_S11[d_idx] ** 2 + d_S21[d_idx] ** 2 +
-                   d_S20[d_idx] ** 2 + d_S21[d_idx] ** 2 + d_S22[d_idx] ** 2)
+                    d_S10[d_idx] ** 2 + d_S11[d_idx] ** 2 + d_S21[d_idx] ** 2 +
+                    d_S20[d_idx] ** 2 + d_S21[d_idx] ** 2 + d_S22[d_idx] ** 2)
 
         den = num + trSdotSt
 
