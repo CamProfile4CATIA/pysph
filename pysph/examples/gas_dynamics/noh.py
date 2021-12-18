@@ -8,12 +8,13 @@ import numpy
 from pysph.base.utils import get_particle_array as gpa
 from pysph.solver.application import Application
 from pysph.sph.scheme import GasDScheme, SchemeChooser, ADKEScheme, GSPHScheme
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 from pysph.sph.wc.crksph import CRKSPHScheme
 from pysph.base.nnps import DomainManager
 
 # problem constants
 dim = 2
-gamma = 5.0/3.0
+gamma = 5.0 / 3.0
 gamma1 = gamma - 1.0
 
 # scheme constants
@@ -31,20 +32,20 @@ xmin = ymin = -1.0
 xmax = ymax = 1.0
 
 nx = ny = 100
-dx = (xmax-xmin)/nx
+dx = (xmax - xmin) / nx
 dxb2 = 0.5 * dx
 
 # initial values
-h0 = kernel_factor*dx
+h0 = kernel_factor * dx
 rho0 = 1.0
-m0 = dx*dx * rho0
+m0 = dx * dx * rho0
 vr = -1.0
 
 
 class NohImplosion(Application):
     def create_particles(self):
         x, y = numpy.mgrid[
-            xmin:xmax:dx, ymin:ymax:dx]
+               xmin:xmax:dx, ymin:ymax:dx]
 
         # positions
         x = x.ravel()
@@ -60,13 +61,13 @@ class NohImplosion(Application):
         sin, cos, arctan = numpy.sin, numpy.cos, numpy.arctan2
         for i in range(x.size):
             theta = arctan(y[i], x[i])
-            u[i] = vr*cos(theta)
-            v[i] = vr*sin(theta)
+            u[i] = vr * cos(theta)
+            v[i] = vr * sin(theta)
 
         fluid = gpa(
             name='fluid', x=x, y=y, m=m, rho=rho, h=h, u=u, v=v, p=1e-12,
             e=2.5e-11, h0=h.copy()
-            )
+        )
         self.scheme.setup_properties([fluid])
 
         print("Noh's problem with %d particles "
@@ -106,8 +107,14 @@ class NohImplosion(Application):
             alpha=1, beta=1, k=1.0, eps=0.8, g1=0.5, g2=0.5,
             has_ghosts=True)
 
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
+            l=0.1, alphamax=2.0, b=1.0, has_ghosts=True
+        )
+
         s = SchemeChooser(
-            default='crksph', crksph=crksph, mpm=mpm, adke=adke, gsph=gsph
+            default='crksph', crksph=crksph, mpm=mpm, adke=adke, gsph=gsph,
+            cullendehnen=cullendehnen
         )
         s.configure_solver(dt=dt, tf=tf, adaptive_timestep=False)
         return s
@@ -130,6 +137,14 @@ class NohImplosion(Application):
         elif self.options.scheme == 'adke':
             s.configure_solver(
                 dt=dt, tf=tf, adaptive_timestep=False, pfreq=50
+            )
+        elif self.options.scheme == 'cullendehnen':
+            from pysph.base.kernels import Gaussian
+            s.configure(
+                Mh=rho0 * h0 ** dim)
+            s.configure_solver(
+                dt=dt, tf=tf, adaptive_timestep=False, pfreq=50,
+                kernel=Gaussian(dim=dim)
             )
 
     def post_process(self):
@@ -155,17 +170,17 @@ class NohImplosion(Application):
         rho = pa.rho
         p = pa.p
 
-        r = numpy.sqrt(x**2 + y**2)
+        r = numpy.sqrt(x ** 2 + y ** 2)
 
         # exact solutions
-        vs = 1.0/3.0  # shock radial velocity
+        vs = 1.0 / 3.0  # shock radial velocity
         rs = vs * tf  # position of shock
         ri = numpy.linspace(0, rs, 10)
         ro = numpy.linspace(rs, xmax, 100)
         re = numpy.concatenate((ri, ro))
 
-        rho_e1 = numpy.ones_like(ri) * ((gamma + 1) / (gamma - 1))**dim
-        rho_e2 = rho0 * (1 + tf / ro)**(dim - 1)
+        rho_e1 = numpy.ones_like(ri) * ((gamma + 1) / (gamma - 1)) ** dim
+        rho_e2 = rho0 * (1 + tf / ro) ** (dim - 1)
         rho_e = numpy.concatenate((rho_e1, rho_e2))
 
         p_e1 = vs * rho_e1

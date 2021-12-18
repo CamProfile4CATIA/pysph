@@ -7,7 +7,7 @@ class KickDriftKickStep(IntegratorStep):
 
     def stage1(self, dt, d_idx, d_x, d_u, d_y, d_v, d_z, d_w,
                d_au, d_av, d_aw, d_ae, d_e, d_h, d_ah, d_ut, d_vt, d_wt,
-               d_et):
+               d_et, t):
         dtb2 = 0.5 * dt
 
         # Initial Kick
@@ -25,8 +25,15 @@ class KickDriftKickStep(IntegratorStep):
         d_u[d_idx] += dt * d_au[d_idx]
         d_v[d_idx] += dt * d_av[d_idx]
         d_w[d_idx] += dt * d_aw[d_idx]
-        d_e[d_idx] = d_e[d_idx] * exp(dt * d_ae[d_idx] / d_e[d_idx])
-        d_h[d_idx] = d_h[d_idx] * exp(dt * d_ah[d_idx] / d_h[d_idx])
+        # d_e[d_idx] = d_e[d_idx] * exp(dt * d_ae[d_idx] / d_e[d_idx])
+        # d_h[d_idx] = d_h[d_idx] * exp(dt * d_ah[d_idx] / d_h[d_idx])
+
+        # Fix for Noh's problem.
+        # Without this if statement, d_e[d_idx] becomes inf!
+        # TODO: Find the real cause to do away with this temporary fix.
+        if t >= dt:
+            d_e[d_idx] = d_e[d_idx] * exp(dt * d_ae[d_idx] / d_e[d_idx])
+            d_h[d_idx] = d_h[d_idx] * exp(dt * d_ah[d_idx] / d_h[d_idx])
 
     def stage2(self, d_idx, d_u, d_v, d_w, d_au, d_av, d_aw, d_ae,
                d_e, dt, d_ut, d_vt, d_wt, d_et):
