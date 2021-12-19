@@ -48,36 +48,6 @@ class CullenDehnenScheme(Scheme):
                     for var in vars)
         self.configure(**data)
 
-    def configure(self, m=None, Nh=None, Mh=None, **kw):
-        if Mh is not None:
-            self.Mh = Mh
-        elif m is not None:
-            if Nh is None:
-                if self.dim == 1:
-                    Nh = 5
-                elif self.dim == 2:
-                    Nh = 13
-                elif self.dim == 3:
-                    Nh = 40
-            if self.dim == 1:
-                Vnu = 2.0
-            elif self.dim == 2:
-                Vnu = pi
-            elif self.dim == 3:
-                Vnu = 4.0 * pi / 3.0
-
-            Mh = m * Nh / Vnu
-            self.Mh = Mh
-
-        for k, v in kw.items():
-            if not hasattr(self, k):
-                msg = 'Parameter {param} not defined for {scheme}.'.format(
-                    param=k, scheme=self.__class__.__name__
-                )
-                raise RuntimeError(msg)
-            setattr(self, k, v)
-        self.attributes_changed()
-
     def configure_solver(self, kernel=None, integrator_cls=None,
                          extra_steppers=None, **kw):
 
@@ -145,7 +115,7 @@ class CullenDehnenScheme(Scheme):
         for fluid in self.fluids:
             adapt.append(
                 AdjustSmoothingLength(
-                    dest=fluid, sources=None, Mh=self.Mh, dim=dim)
+                    dest=fluid, sources=None, dim=dim)
             )
 
         equations.append(Group(equations=adapt, update_nnps=True))
@@ -266,10 +236,12 @@ class CullenDehnenScheme(Scheme):
             pa.add_property('orig_idx', type='int')
             nfp = pa.get_number_of_particles()
             pa.orig_idx[:] = numpy.arange(nfp)
+            pa.add_property('Mh', data=pa.rho * pa.h ** self.dim)
             pa.set_output_arrays(output_props)
 
         solid_props = set(props) | set('div cs wij htmp'.split(' '))
         for solid in self.solids:
             pa = particle_arrays[solid]
             self._ensure_properties(pa, solid_props, clean)
+            pa.add_property('Mh', data=pa.rho * pa.h ** self.dim)
             pa.set_output_arrays(output_props)

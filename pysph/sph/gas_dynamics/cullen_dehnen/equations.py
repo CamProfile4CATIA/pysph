@@ -41,28 +41,26 @@ class Factorf(Equation):
 
 
 class AdjustSmoothingLength(Equation):
-    def __init__(self, dest, sources, Mh, dim):
-        self.Mh = Mh
+    def __init__(self, dest, sources, dim):
         self.dim = dim
         super().__init__(dest, sources)
 
     def post_loop(self, d_idx, d_f, d_rho, d_h, d_ftil, d_m, SPH_KERNEL,
-                  d_hnurho, d_hnu, WI):
+                  d_hnurho, d_hnu, WI, d_Mh):
         dim = self.dim
-        Mh = self.Mh
 
-        if d_hnurho[d_idx] < Mh:
+        if d_hnurho[d_idx] < d_Mh[d_idx]:
             wo = SPH_KERNEL.kernel(xij=[0.0, 0.0, 0.0], rij=0.0,
                                    h=d_h[d_idx]) * d_hnu[d_idx]
             d_ftil[d_idx] = (d_f[d_idx] * (d_hnurho[d_idx] - d_m[d_idx] * wo) /
                              d_hnurho[d_idx])
             pw = d_ftil[d_idx] / dim
-            num = Mh - d_m[d_idx] * wo
+            num = d_Mh[d_idx] - d_m[d_idx] * wo
             den = d_hnurho[d_idx] - d_m[d_idx] * wo
             d_h[d_idx] *= (num / den) ** pw
         else:
             pw = d_f[d_idx] / dim
-            d_h[d_idx] *= (Mh / d_hnurho[d_idx]) ** pw
+            d_h[d_idx] *= (d_Mh[d_idx] / d_hnurho[d_idx]) ** pw
 
         d_hnu[d_idx] = d_h[d_idx] ** dim
 
