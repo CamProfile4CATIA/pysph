@@ -62,6 +62,9 @@ class SodShockTube(ShockTubeSetup):
             gamma1=gamma1, ul=self.ul, ur=self.ur
         )
         self.scheme.setup_properties([f, b])
+        if self.options.scheme == 'cullendehnen':
+            # override Mh set by CullenDehnenScheme.setup_properties()
+            f.add_property('Mh', data=self.ml * 5/2)
         return [f]
 
     def create_domain(self):
@@ -71,15 +74,9 @@ class SodShockTube(ShockTubeSetup):
         )
 
     def configure_scheme(self):
-        from pysph.base.kernels import CubicSpline
         scheme = self.scheme
         if self.options.scheme in ['gsph', 'mpm']:
             scheme.configure(kernel_factor=self.hdx)
-        elif self.options.scheme == 'cullendehnen':
-            self.hdx = 3.0 * self.hdx
-            scheme.configure(Mh=self.rhol * (self.hdx*self.dxl)**dim)
-            # 3.0 * self.hdx * self.dxl because default Gaussian Kernel
-            # has radius scale = 3.0
         scheme.configure_solver(tf=self.tf, dt=self.dt)
 
     def create_scheme(self):
