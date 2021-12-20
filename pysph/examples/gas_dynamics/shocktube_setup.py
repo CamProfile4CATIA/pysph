@@ -6,6 +6,8 @@ import os
 import numpy
 from math import sqrt
 
+import pysph.base.c_kernels
+
 from pysph.base.utils import get_particle_array as gpa
 from pysph.solver.application import Application
 from pysph.examples.gas_dynamics import riemann_solver
@@ -160,3 +162,6 @@ class ShockTubeSetup(Application):
         elif self.options.scheme == 'crk':
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=1)
+        elif self.options.scheme == 'cullendehnen':
+            s.configure_solver(dt=self.dt, tf=self.tf,
+                               adaptive_timestep=False, pfreq=50)
