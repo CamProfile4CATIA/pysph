@@ -7,6 +7,7 @@ from pysph.sph.scheme import (
     GSPHScheme, SchemeChooser, ADKEScheme, GasDScheme
 )
 from pysph.sph.wc.crksph import CRKSPHScheme
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 from pysph.base.utils import get_particle_array as gpa
 from pysph.base.nnps import DomainManager
 from pysph.solver.application import Application
@@ -42,8 +43,8 @@ class WCBlastwave(Application):
     def create_particles(self):
         self.dx = self.domain_length / self.n_particles
         x = numpy.arange(
-            self.xmin + self.dx*0.5, self.xmax, self.dx
-            )
+            self.xmin + self.dx * 0.5, self.xmax, self.dx
+        )
 
         p = numpy.ones_like(x) * self.p2
 
@@ -53,7 +54,7 @@ class WCBlastwave(Application):
         p[left_indices] = self.p1
         p[right_indices] = self.p3
 
-        h = self.hdx*self.dx
+        h = self.hdx * self.dx
         m = self.dx * self.rho
         e = p / ((self.gamma - 1) * self.rho)
 
@@ -62,7 +63,7 @@ class WCBlastwave(Application):
         fluid = gpa(
             name='fluid', x=x, rho=self.rho, p=p, h=h, m=m, e=e, cs=cs,
             h0=h, u=0
-            )
+        )
 
         self.scheme.setup_properties([fluid])
         return [fluid]
@@ -101,9 +102,15 @@ class WCBlastwave(Application):
             gamma=gamma, cl=4, cq=1, eta_crit=0.2, has_ghosts=True
         )
 
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
+            l=0.1, alphamax=2.0, b=1.0, has_ghosts=True
+        )
+
         s = SchemeChooser(
-            default='gsph', gsph=gsph, adke=adke, mpm=mpm, crksph=crk
-            )
+            default='gsph', gsph=gsph, adke=adke, mpm=mpm, crksph=crk,
+            cullendehnen=cullendehnen
+        )
         return s
 
     def configure_scheme(self):
@@ -121,6 +128,11 @@ class WCBlastwave(Application):
         elif self.options.scheme == 'crksph':
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=20)
+        elif self.options.scheme == 'cullendehnen':
+            from pysph.base.kernels import Gaussian
+            s.configure_solver(dt=self.dt, tf=self.tf,
+                               adaptive_timestep=False, pfreq=50,
+                               kernel=Gaussian(dim=dim))
 
     def post_process(self):
         if len(self.output_files) < 1 or self.rank > 0:
@@ -172,7 +184,7 @@ class WCBlastwave(Application):
                     dataset.get(props_h5[_i])['data_0'].get("'data'")
                     ['data_0'][:],
                     c='k', s=4
-                    )
+                )
             pyplot.xlabel('x')
             pyplot.ylabel(props[_i])
             pyplot.legend(plot_legends)
