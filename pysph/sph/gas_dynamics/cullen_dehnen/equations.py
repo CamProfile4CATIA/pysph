@@ -574,7 +574,7 @@ class WallBoundary(Equation):
 
     def loop(self, d_idx, s_idx, d_p, d_rho, d_e, d_m, d_cs, d_divv, d_h, d_u,
              d_v, d_w, d_wij, d_htmp, s_p, s_rho, s_e, s_m, s_cs, s_h, s_divv,
-             s_u, s_v, s_w, WI):
+             s_u, s_v, s_w, WI, s_f, d_f, s_hnurho, d_hnurho):
         d_wij[d_idx] += WI
         d_p[d_idx] += s_p[s_idx] * WI
         d_u[d_idx] -= s_u[s_idx] * WI
@@ -586,9 +586,11 @@ class WallBoundary(Equation):
         d_cs[d_idx] += s_cs[s_idx] * WI
         d_divv[d_idx] += s_divv[s_idx] * WI
         d_htmp[d_idx] += s_h[s_idx] * WI
+        d_f[d_idx] += s_f[s_idx] * WI
+        d_hnurho[d_idx] += s_hnurho[s_idx] * WI
 
     def post_loop(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_divv, d_h, d_u,
-                  d_v, d_w, d_wij, d_htmp):
+                  d_v, d_w, d_wij, d_htmp, d_f, d_hnurho):
         if (d_wij[d_idx] > 1e-30):
             d_p[d_idx] = d_p[d_idx] / d_wij[d_idx]
             d_u[d_idx] = d_u[d_idx] / d_wij[d_idx]
@@ -600,3 +602,6 @@ class WallBoundary(Equation):
             d_cs[d_idx] = d_cs[d_idx] / d_wij[d_idx]
             d_divv[d_idx] = d_divv[d_idx] / d_wij[d_idx]
             d_h[d_idx] = d_htmp[d_idx] / d_wij[d_idx]
+            d_f[d_idx] = d_f[d_idx] / d_wij[d_idx]
+            d_hnurho[d_idx] = d_hnurho[d_idx] / d_wij[d_idx]
+
