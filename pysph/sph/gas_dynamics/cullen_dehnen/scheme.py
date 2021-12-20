@@ -230,18 +230,28 @@ class CullenDehnenScheme(Scheme):
                      'S10', 'S22', 'S11', 'S00', 'S20', 'S21', 'R', 'vsig',
                      'xi', 'A', 'alphaloc', 'tau', 'alpha', 'ahden', 'hnu']
         props.extend(add_props)
+        if self.dim == 1:
+            Nh = 5.0
+            Vnu = 2.0
+        elif self.dim == 2:
+            Nh = 13.0
+            Vnu = pi
+        elif self.dim == 3:
+            Nh = 40
+            Vnu = 4.0 * pi / 3.0
+
         for fluid in self.fluids:
             pa = particle_arrays[fluid]
             self._ensure_properties(pa, props, clean)
             pa.add_property('orig_idx', type='int')
             nfp = pa.get_number_of_particles()
             pa.orig_idx[:] = numpy.arange(nfp)
-            pa.add_property('Mh', data=pa.rho * pa.h ** self.dim)
+            pa.add_property('Mh', data=pa.m * Nh / Vnu)
             pa.set_output_arrays(output_props)
 
         solid_props = set(props) | set('div cs wij htmp'.split(' '))
         for solid in self.solids:
             pa = particle_arrays[solid]
             self._ensure_properties(pa, solid_props, clean)
-            pa.add_property('Mh', data=pa.rho * pa.h ** self.dim)
+            pa.add_property('Mh', data=pa.m * Nh / Vnu)
             pa.set_output_arrays(output_props)
