@@ -427,10 +427,14 @@ class IndividualViscosityLocal(Equation):
     def post_loop(self, d_idx, d_h, d_A, d_vsig, d_alphaloc):
         alphamax = self.alphamax
         hsq = d_h[d_idx] * d_h[d_idx]
-        num = hsq * d_A[d_idx]
-        den = num + d_vsig[d_idx] * d_vsig[d_idx]
-        d_alphaloc[d_idx] = alphamax * num / den
 
+        # To avoid nan when den = 0
+        if d_A[d_idx] > 1e-20:
+            num = hsq * d_A[d_idx]
+            den = num + d_vsig[d_idx] * d_vsig[d_idx]
+            d_alphaloc[d_idx] = alphamax * num / den
+        else:
+            d_alphaloc[d_idx] = 0.0
 
 class ViscosityDecayTimeScale(Equation):
     def __init__(self, dest, sources, l):
