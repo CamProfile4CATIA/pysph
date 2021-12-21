@@ -4,6 +4,7 @@ import os
 import numpy
 from pysph.examples.gas_dynamics.shocktube_setup import ShockTubeSetup
 from pysph.sph.scheme import ADKEScheme, GasDScheme, GSPHScheme, SchemeChooser
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 
 
 # Numerical constants
@@ -82,7 +83,14 @@ class Blastwave(ShockTubeSetup):
             niter=20, tol=1e-6
         )
 
-        s = SchemeChooser(default='adke', adke=adke, gsph=gsph)
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=['boundary'], dim=dim, gamma=gamma,
+            l=0.05, alphamax=2.0, b=0.5
+        )
+
+        s = SchemeChooser(default='adke', adke=adke, gsph=gsph,
+                          cullendehnen=cullendehnen)
+
         return s
 
 

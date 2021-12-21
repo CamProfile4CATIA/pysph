@@ -90,7 +90,7 @@ class CullenDehnenScheme(Scheme):
             FalseDetectionSuppressingLimiterXi, NovelShockIndicatorA,
             IndividualViscosityLocal, ViscosityDecayTimeScale,
             AdaptIndividualViscosity, UpdateGhostProps,
-            MomentumAndEnergy, ArtificialViscocity, WallBoundary)
+            MomentumAndEnergy, ArtificialViscocity, WallBoundary1, WallBoundary2)
 
         equations = []
 
@@ -119,6 +119,12 @@ class CullenDehnenScheme(Scheme):
             )
 
         equations.append(Group(equations=adapt, update_nnps=True))
+
+        walleq1 = []
+        for solid in self.solids:
+            walleq1.append(WallBoundary1(solid, sources=self.fluids,
+                                         dim = self.dim))
+        equations.append(Group(equations=walleq1))
 
         sweep1 = []
         for fluid in self.fluids:
@@ -186,10 +192,11 @@ class CullenDehnenScheme(Scheme):
 
         equations.append(Group(equations=bwsweeps, update_nnps=True))
 
-        walleq = []
+        walleq2 = []
         for solid in self.solids:
-            walleq.append(WallBoundary(solid, sources=self.fluids))
-        equations.append(Group(equations=walleq))
+            walleq2.append(WallBoundary2(solid, sources=self.fluids,
+                                         dim=self.dim))
+        equations.append(Group(equations=walleq2))
 
         if self.has_ghosts:
             gh = []
