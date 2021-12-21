@@ -61,10 +61,6 @@ class SodShockTube(ShockTubeSetup):
             m=self.ml, pl=self.pl, pr=self.pr, h0=self.h0, bx=0.00,
             gamma1=gamma1, ul=self.ul, ur=self.ur
         )
-        self.scheme.setup_properties([f, b])
-        if self.options.scheme == 'cullendehnen':
-            # override Mh set by CullenDehnenScheme.setup_properties()
-            f.add_property('Mh', data=self.ml * 5/2)
         return [f]
 
     def create_domain(self):
