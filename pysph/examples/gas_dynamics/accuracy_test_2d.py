@@ -6,6 +6,7 @@ particles should simply advect in a periodic domain
 
 # NumPy and standard library imports
 import numpy
+from math import pi
 
 from pysph.base.nnps import DomainManager
 from pysph.base.utils import get_particle_array as gpa
@@ -118,6 +119,9 @@ class AccuracyTest2D(Application):
         print("2D Accuracy Test with %d particles"
               % (fluid.get_number_of_particles()))
 
+        if self.options.scheme == 'cullendehnen':
+            fluid.add_property('Mh', data=max(fluid.m) * 25/pi)
+
         return [fluid, ]
 
     def create_scheme(self):
@@ -173,9 +177,6 @@ class AccuracyTest2D(Application):
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
         elif self.options.scheme == 'cullendehnen':
-            self.hdx = 3.0 * self.hdx
-            # because default Gaussian Kernel has radius scale = 3.0.
-            s.configure(Mh=max(self.rho) * (self.hdx * self.dx) ** dim)
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
 
