@@ -159,6 +159,7 @@ class AcousticWave(Application):
 
     def post_process(self):
         from pysph.solver.utils import load
+        import os
         if len(self.output_files) < 1:
             return
         outfile = self.output_files[-1]
@@ -186,6 +187,8 @@ class AcousticWave(Application):
         )
         l1 = l1 / self.n_particles
         print("l_1 norm of density for the problem: %s" % (l1))
+        fname = os.path.join(self.output_dir, 'norms.npz')
+        numpy.savez(fname, l_infvel=l_inf, l_1vel=l_1, l_1rho=l1)
 
 
 if __name__ == "__main__":
