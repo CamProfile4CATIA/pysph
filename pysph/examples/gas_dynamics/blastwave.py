@@ -85,7 +85,7 @@ class Blastwave(ShockTubeSetup):
 
         cullendehnen = CullenDehnenScheme(
             fluids=['fluid'], solids=['boundary'], dim=dim, gamma=gamma,
-            l=0.05, alphamax=2.0, b=0.5
+            l=0.05, alphamax=2.0, b=1.0
         )
 
         s = SchemeChooser(default='adke', adke=adke, gsph=gsph,
