@@ -8,6 +8,7 @@ import numpy
 from pysph.base.utils import get_particle_array as gpa
 from pysph.solver.application import Application
 from pysph.sph.scheme import GasDScheme, SchemeChooser, ADKEScheme, GSPHScheme
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 from pysph.sph.wc.crksph import CRKSPHScheme
 from pysph.base.nnps import DomainManager
 from pysph.tools import uniform_distribution as ud
@@ -150,8 +151,14 @@ class KHInstability(Application):
             niter=40, tol=1e-6, has_ghosts=True
         )
 
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
+            l=0.05, alphamax=2.0, b=1.0, has_ghosts=True
+        )
+
         s = SchemeChooser(
-            default='crksph', crksph=crk, gsph=gsph, adke=adke, mpm=mpm
+            default='crksph', crksph=crk, gsph=gsph, adke=adke, mpm=mpm,
+            cullendehnen=cullendehnen
         )
 
         return s
@@ -172,7 +179,11 @@ class KHInstability(Application):
         elif self.options.scheme == 'gsph':
             s.configure_solver(dt=dt, tf=tf,
                                adaptive_timestep=False, pfreq=50)
-
+        elif self.options.scheme == 'cullendehnen':
+            from pysph.base.kernels import Gaussian
+            s.configure_solver(dt=dt, tf=tf,
+                               adaptive_timestep=False, pfreq=50,
+                               kernel=Gaussian(dim=dim))
 
 if __name__ == "__main__":
     app = KHInstability()
