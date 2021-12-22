@@ -16,6 +16,7 @@ where :math:`\lambda` is the domain length.
 
 # standard library and numpy imports
 import numpy
+from math import pi
 
 # pysph imports
 from pysph.base.utils import get_particle_array as gpa
@@ -56,7 +57,7 @@ class AcousticWave(Application):
         )
         group.add_argument(
             "--hdx", action="store", type=float,
-            dest="hdx", default=1.0,
+            dest="hdx", default=1.2,
             help="Ratio h/dx."
         )
 
@@ -153,9 +154,6 @@ class AcousticWave(Application):
                                adaptive_timestep=False, pfreq=50)
 
         elif self.options.scheme == 'cullendehnen':
-            # Since default Gaussian Kernel has radius_scale = 3.0
-            self.hdx = 3.0 * self.hdx
-            s.configure(Mh=max(self.rho) * (self.hdx * self.dx) ** self.dim)
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
 
