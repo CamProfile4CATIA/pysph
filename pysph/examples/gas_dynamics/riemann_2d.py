@@ -284,7 +284,6 @@ class Riemann2D(Application):
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
         elif self.options.scheme == 'cullendehnen':
-            from pysph.base.kernels import Gaussian
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
 
