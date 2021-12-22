@@ -188,7 +188,7 @@ class AcousticWave(Application):
         l1 = l1 / self.n_particles
         print("l_1 norm of density for the problem: %s" % (l1))
         fname = os.path.join(self.output_dir, 'norms.npz')
-        numpy.savez(fname, l_infvel=l_inf, l_1vel=l_1, l_1rho=l1)
+        numpy.savez(fname, linf_vel=l_inf, l1_vel=l_1, l1_rho=l1)
 
 
 if __name__ == "__main__":
