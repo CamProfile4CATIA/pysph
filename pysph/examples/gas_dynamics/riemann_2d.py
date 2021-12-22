@@ -223,9 +223,6 @@ class Riemann2D(Application):
     def create_particles(self):
         fluid = self.dfunction()
         self.scheme.setup_properties([fluid])
-        if self.options.scheme == 'cullendehnen':
-            # override Mh set by CullenDehnenScheme.setup_properties()
-            fluid.add_property('Mh', data=fluid.m * 13.0/pi)
         return [fluid]
 
     def create_domain(self):
