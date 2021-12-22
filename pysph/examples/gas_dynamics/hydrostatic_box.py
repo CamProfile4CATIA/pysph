@@ -89,7 +89,7 @@ class HydrostaticBox(Application):
         )
         cullendehnen = CullenDehnenScheme(
             fluids=['fluid'], solids=[], dim=2, gamma=self.gamma,
-            l=0.1, alphamax=2.0, b=0.1, has_ghosts=True
+            l=0.05, alphamax=2.0, b=1.0, has_ghosts=True
         )
         s = SchemeChooser(
             default='adke', adke=adke, mpm=mpm, gsph=gsph,
@@ -117,9 +117,9 @@ class HydrostaticBox(Application):
                                adaptive_timestep=False, pfreq=50)
         elif self.options.scheme == 'cullendehnen':
             from pysph.base.kernels import Gaussian
-            s.configure(Mh=self.rhoi * (0.5 * self.hdx * self.dx) ** 2)
             s.configure_solver(dt=self.dt, tf=self.tf,
-                               adaptive_timestep=False, pfreq=50, kernel=Gaussian(dim=2))
+                               adaptive_timestep=False, pfreq=50,
+                               kernel=Gaussian(dim=2))
 
 
 if __name__ == "__main__":
