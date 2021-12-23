@@ -66,7 +66,7 @@ class Robert(ShockTubeSetup):
         self.scheme.setup_properties([f, b])
         if self.options.scheme == 'cullendehnen':
             # override Mh set by CullenDehnenScheme.setup_properties()
-            f.add_property('Mh', data=self.hdx*self.dxl*self.rhol)
+            f.add_property('Mh', data=self.h0*self.rhor)
         return [f]
 
     def create_scheme(self):
@@ -92,7 +92,7 @@ class Robert(ShockTubeSetup):
 
         cullendehnen = CullenDehnenScheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            l=0.1, alphamax=2.0, b=2.0, has_ghosts=True
+            l=0.05, alphamax=2.0, b=1.0, has_ghosts=True
         )
 
         s = SchemeChooser(default='adke', adke=adke, mpm=mpm, gsph=gsph,
