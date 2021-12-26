@@ -61,9 +61,6 @@ class WallShock(ShockTubeSetup):
                                        pr=self.pr, h0=self.h0, bx=0.02,
                                        gamma1=gamma1, ul=self.ul, ur=self.ur)
 
-        if self.options.scheme == 'cullendehnen':
-            # override Mh set by CullenDehnenScheme.setup_properties()
-            f.add_property('Mh', data=self.hdx*self.dxr*self.rhor)
         return [f,b]
 
     def create_scheme(self):
@@ -119,9 +116,8 @@ class WallShock(ShockTubeSetup):
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=1)
         elif self.options.scheme == 'cullendehnen':
-            from pysph.base.kernels import CubicSpline
             s.configure_solver(dt=self.dt, tf=self.tf,
-                               adaptive_timestep=False, pfreq=50,kernel=CubicSpline(dim=dim))
+                               adaptive_timestep=False, pfreq=50)
 
 if __name__ == '__main__':
     app = WallShock()
