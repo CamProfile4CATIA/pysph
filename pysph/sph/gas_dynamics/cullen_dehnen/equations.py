@@ -45,8 +45,8 @@ class AdjustSmoothingLength(Equation):
         self.dim = dim
         super().__init__(dest, sources)
 
-    def post_loop(self, d_idx, d_f, d_rho, d_h, d_ftil, d_m, SPH_KERNEL,
-                  d_hnurho, d_hnu, WI, d_Mh):
+    def post_loop(self, d_idx, d_f, d_h, d_ftil, d_m, SPH_KERNEL,
+                  d_hnurho, d_hnu, d_Mh):
         dim = self.dim
 
         if d_hnurho[d_idx] < d_Mh[d_idx]:
@@ -276,24 +276,33 @@ class AcclerationGradient(Equation):
                   d_DD01, d_DD02, d_DD10, d_DD11, d_DD12, d_DD20, d_DD21,
                   d_DD22, d_grada00, d_grada01, d_grada02, d_grada10,
                   d_grada11, d_grada12, d_grada20, d_grada21, d_grada22):
-        d_grada00[d_idx] = (d_DD00[d_idx] * d_invT00[d_idx] + d_DD01[d_idx] *
-                            d_invT10[d_idx] + d_DD02[d_idx] * d_invT20[d_idx])
-        d_grada01[d_idx] = (d_DD00[d_idx] * d_invT01[d_idx] + d_DD01[d_idx] *
-                            d_invT11[d_idx] + d_DD02[d_idx] * d_invT21[d_idx])
-        d_grada02[d_idx] = (d_DD00[d_idx] * d_invT02[d_idx] + d_DD01[d_idx] *
-                            d_invT12[d_idx] + d_DD02[d_idx] * d_invT22[d_idx])
-        d_grada10[d_idx] = (d_DD10[d_idx] * d_invT00[d_idx] + d_DD11[d_idx] *
-                            d_invT10[d_idx] + d_DD12[d_idx] * d_invT20[d_idx])
-        d_grada11[d_idx] = (d_DD10[d_idx] * d_invT01[d_idx] + d_DD11[d_idx] *
-                            d_invT11[d_idx] + d_DD12[d_idx] * d_invT21[d_idx])
-        d_grada12[d_idx] = (d_DD10[d_idx] * d_invT02[d_idx] + d_DD11[d_idx] *
-                            d_invT12[d_idx] + d_DD12[d_idx] * d_invT22[d_idx])
-        d_grada20[d_idx] = (d_DD20[d_idx] * d_invT00[d_idx] + d_DD21[d_idx] *
-                            d_invT10[d_idx] + d_DD22[d_idx] * d_invT20[d_idx])
-        d_grada21[d_idx] = (d_DD20[d_idx] * d_invT01[d_idx] + d_DD21[d_idx] *
-                            d_invT11[d_idx] + d_DD22[d_idx] * d_invT21[d_idx])
-        d_grada22[d_idx] = (d_DD20[d_idx] * d_invT02[d_idx] + d_DD21[d_idx] *
-                            d_invT12[d_idx] + d_DD22[d_idx] * d_invT22[d_idx])
+        d_grada00[d_idx] = (d_DD00[d_idx] * d_invT00[d_idx] +
+                            d_DD01[d_idx] * d_invT10[d_idx] +
+                            d_DD02[d_idx] * d_invT20[d_idx])
+        d_grada01[d_idx] = (d_DD00[d_idx] * d_invT01[d_idx] +
+                            d_DD01[d_idx] * d_invT11[d_idx] +
+                            d_DD02[d_idx] * d_invT21[d_idx])
+        d_grada02[d_idx] = (d_DD00[d_idx] * d_invT02[d_idx] +
+                            d_DD01[d_idx] * d_invT12[d_idx] +
+                            d_DD02[d_idx] * d_invT22[d_idx])
+        d_grada10[d_idx] = (d_DD10[d_idx] * d_invT00[d_idx] +
+                            d_DD11[d_idx] * d_invT10[d_idx] +
+                            d_DD12[d_idx] * d_invT20[d_idx])
+        d_grada11[d_idx] = (d_DD10[d_idx] * d_invT01[d_idx] +
+                            d_DD11[d_idx] * d_invT11[d_idx] +
+                            d_DD12[d_idx] * d_invT21[d_idx])
+        d_grada12[d_idx] = (d_DD10[d_idx] * d_invT02[d_idx] +
+                            d_DD11[d_idx] * d_invT12[d_idx] +
+                            d_DD12[d_idx] * d_invT22[d_idx])
+        d_grada20[d_idx] = (d_DD20[d_idx] * d_invT00[d_idx] +
+                            d_DD21[d_idx] * d_invT10[d_idx] +
+                            d_DD22[d_idx] * d_invT20[d_idx])
+        d_grada21[d_idx] = (d_DD20[d_idx] * d_invT01[d_idx] +
+                            d_DD21[d_idx] * d_invT11[d_idx] +
+                            d_DD22[d_idx] * d_invT21[d_idx])
+        d_grada22[d_idx] = (d_DD20[d_idx] * d_invT02[d_idx] +
+                            d_DD21[d_idx] * d_invT12[d_idx] +
+                            d_DD22[d_idx] * d_invT22[d_idx])
 
 
 class VelocityDivergenceRate(Equation):
