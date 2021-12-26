@@ -192,6 +192,10 @@ class WCBlastwave(Application):
             pyplot.savefig(fig, dpi=300)
             pyplot.close('all')
 
+        fname = os.path.join(self.output_dir, 'results.npz')
+        numpy.savez(fname, x=pa.x, u=pa.u, e=pa.e, cs=pa.cs, rho=pa.rho,
+                    p=pa.p, h=pa.h)
+
 
 if __name__ == '__main__':
     app = WCBlastwave()
