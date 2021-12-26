@@ -660,8 +660,8 @@ class WallBoundary2(Equation):
         d_hnurho[d_idx] += s_hnurho[s_idx] * WI
         d_hnu[d_idx] += s_hnu[s_idx] * WI
 
-    def post_loop(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_divv, d_h, d_u,
-                  d_v, d_w, d_wij, d_htmp, d_f, d_hnurho, d_hnu):
+    def post_loop(self, d_idx, d_p, d_rho, d_cs, d_divv, d_h, d_wij, d_htmp,
+                  d_f, d_hnurho, d_hnu):
         if (d_wij[d_idx] > 1e-30):
             d_p[d_idx] = d_p[d_idx] / d_wij[d_idx]
             d_rho[d_idx] = d_rho[d_idx] / d_wij[d_idx]

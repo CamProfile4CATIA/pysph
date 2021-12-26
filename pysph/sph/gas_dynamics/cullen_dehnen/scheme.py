@@ -237,6 +237,12 @@ class CullenDehnenScheme(Scheme):
                      'S10', 'S22', 'S11', 'S00', 'S20', 'S21', 'R', 'vsig',
                      'xi', 'A', 'alphaloc', 'tau', 'alpha', 'ahden', 'hnu']
         props.extend(add_props)
+
+        # For Mh.
+        # Per se, Mh is supposed to be a global constant and
+        # need not be set here like this. This just provides allows the
+        # flexibility to try running with different Mh for each particle
+
         if self.dim == 1:
             Nh = 5.0
             Vnu = 2.0
@@ -244,7 +250,7 @@ class CullenDehnenScheme(Scheme):
             Nh = 13.0
             Vnu = pi
         elif self.dim == 3:
-            Nh = 40
+            Nh = 40.0
             Vnu = 4.0 * pi / 3.0
 
         for fluid in self.fluids:
