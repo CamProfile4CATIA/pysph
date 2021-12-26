@@ -31,7 +31,7 @@ class KickDriftKickStep(IntegratorStep):
         # Fix for Noh's problem.
         # Without this if statement, d_e[d_idx] becomes inf!
         # TODO: Find the real cause to do away with this temporary fix.
-        if abs(d_ae[d_idx]) >= 1e-20:
+        if t>dt:
             d_e[d_idx] = d_e[d_idx] * exp(dt * d_ae[d_idx] / d_e[d_idx])
             d_h[d_idx] = d_h[d_idx] * exp(dt * d_ah[d_idx] / d_h[d_idx])
 
