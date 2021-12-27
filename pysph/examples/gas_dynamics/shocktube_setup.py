@@ -15,7 +15,7 @@ from pysph.examples.gas_dynamics import riemann_solver
 
 class ShockTubeSetup(Application):
 
-    def generate_particles(self, xmin, xmax, dxl, dxr, m, pl, pr, h0,  bx,
+    def generate_particles(self, xmin, xmax, dxl, dxr, m, pl, pr, h0, bx,
                            gamma1, ul=0, ur=0, constants={}):
         xt1 = numpy.arange(xmin - bx + 0.5 * dxl, 0, dxl)
         xt2 = numpy.arange(0.5 * dxr, xmax + bx, dxr)
@@ -67,6 +67,11 @@ class ShockTubeSetup(Application):
         self.scheme.setup_properties([fluid, boundary])
         print("1D Shocktube with %d particles" %
               (fluid.get_number_of_particles()))
+        if self.options.scheme == 'cullendehnen':
+            if self.set_Mh == 'case':
+                h = max(fluid.h)
+                rho = max(fluid.rho)
+                fluid.add_property('Mh', data=rho * h ** self.dim)
         return [fluid, boundary]
 
     def post_process(self):
@@ -143,10 +148,10 @@ class ShockTubeSetup(Application):
 
     def configure_scheme(self):
         s = self.scheme
-        dxl = 0.5/self.nl
-        ratio = self.rhor/self.rhol
-        nr = ratio*self.nl
-        dxr = 0.5/self.nr
+        dxl = 0.5 / self.nl
+        ratio = self.rhor / self.rhol
+        nr = ratio * self.nl
+        dxr = 0.5 / self.nr
         h0 = self.hdx * self.dxr
         kernel_factor = self.options.hdx
         if self.options.scheme == 'mpm':

@@ -17,7 +17,6 @@ tf = 0.15
 
 
 class SodShockTube(ShockTubeSetup):
-
     def initialize(self):
         self.xmin = -0.5
         self.xmax = 0.5
@@ -28,6 +27,7 @@ class SodShockTube(ShockTubeSetup):
         self.pr = 0.1
         self.ul = 0.0
         self.ur = 0.0
+        self.dim=dim
 
     def add_user_options(self, group):
         group.add_argument(
@@ -38,6 +38,13 @@ class SodShockTube(ShockTubeSetup):
         group.add_argument(
             "--nl", action="store", type=float, dest="nl", default=640,
             help="Number of particles in left region"
+        )
+
+        group.add_argument(
+            "--set-Mh", action="store", dest="set_Mh",
+            default='scheme', choices=['scheme', 'case'],
+            help="scheme : default number of neighbours according to scheme\
+              case: based on smoothing length of the case."
         )
 
     def consume_user_options(self):
@@ -52,6 +59,7 @@ class SodShockTube(ShockTubeSetup):
         self.hdx = self.hdx
         self.dt = dt
         self.tf = tf
+        self.set_Mh=self.options.set_Mh
 
     def create_particles(self):
         # Boundary particles are not needed as we are mirroring the particles
