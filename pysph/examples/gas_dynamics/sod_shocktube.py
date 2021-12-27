@@ -2,6 +2,7 @@
 """
 from pysph.examples.gas_dynamics.shocktube_setup import ShockTubeSetup
 from pysph.sph.scheme import ADKEScheme, GasDScheme, GSPHScheme, SchemeChooser
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 from pysph.sph.wc.crksph import CRKSPHScheme
 from pysph.base.nnps import DomainManager
 
@@ -16,7 +17,6 @@ tf = 0.15
 
 
 class SodShockTube(ShockTubeSetup):
-
     def initialize(self):
         self.xmin = -0.5
         self.xmax = 0.5
@@ -27,6 +27,7 @@ class SodShockTube(ShockTubeSetup):
         self.pr = 0.1
         self.ul = 0.0
         self.ur = 0.0
+        self.dim = dim
 
     def add_user_options(self, group):
         group.add_argument(
@@ -39,18 +40,26 @@ class SodShockTube(ShockTubeSetup):
             help="Number of particles in left region"
         )
 
+        group.add_argument(
+            "--set-Mh", action="store", dest="set_Mh",
+            default='scheme', choices=['scheme', 'case'],
+            help="scheme : default number of neighbours according to scheme\
+              case: based on smoothing length of the case."
+        )
+
     def consume_user_options(self):
         self.nl = self.options.nl
         self.hdx = self.options.hdx
-        ratio = self.rhor/self.rhol
-        self.nr = self.nl*ratio
-        self.dxl = 0.5/self.nl
-        self.dxr = 0.5/self.nr
+        ratio = self.rhor / self.rhol
+        self.nr = self.nl * ratio
+        self.dxl = 0.5 / self.nl
+        self.dxr = 0.5 / self.nr
         self.ml = self.dxl * self.rhol
         self.h0 = self.hdx * self.dxr
         self.hdx = self.hdx
         self.dt = dt
         self.tf = tf
+        self.set_Mh = self.options.set_Mh
 
     def create_particles(self):
         # Boundary particles are not needed as we are mirroring the particles
@@ -60,7 +69,6 @@ class SodShockTube(ShockTubeSetup):
             m=self.ml, pl=self.pl, pr=self.pr, h0=self.h0, bx=0.00,
             gamma1=gamma1, ul=self.ul, ur=self.ur
         )
-        self.scheme.setup_properties([f, b])
         return [f]
 
     def create_domain(self):
@@ -96,9 +104,14 @@ class SodShockTube(ShockTubeSetup):
             fluids=['fluid'], dim=dim, rho0=0, c0=0,
             nu=0, h0=0, p0=0, gamma=gamma, cl=3
         )
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
+            l=0.05, alphamax=2.0, b=0.5, has_ghosts=True
+        )
         s = SchemeChooser(
-            default='adke', adke=adke, mpm=mpm, gsph=gsph, crk=crk
-            )
+            default='adke', adke=adke, mpm=mpm, gsph=gsph, crk=crk,
+            cullendehnen=cullendehnen
+        )
         return s
 
 
