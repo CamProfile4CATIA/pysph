@@ -445,14 +445,16 @@ class IndividualViscosityLocal(Equation):
         else:
             d_alphaloc[d_idx] = 0.0
 
+
 class ViscosityDecayTimeScale(Equation):
-    def __init__(self, dest, sources, l):
+    def __init__(self, dest, sources, l, fkern):
         self.l = l
+        self.fkern = fkern
         super().__init__(dest, sources)
 
     def post_loop(self, d_idx, d_cs, d_h, d_tau, SPH_KERNEL):
         l = self.l
-        fkern = SPH_KERNEL.fkern
+        fkern = self.fkern
         d_tau[d_idx] = d_h[d_idx] * fkern / (l * d_cs[d_idx])
 
 
@@ -570,9 +572,10 @@ class ArtificialViscocity(Equation):
 
 
 class WallBoundary1(Equation):
-    def __init__(self,dest,sources,dim):
-        self.dim=dim
-        super().__init__(dest,sources)
+    def __init__(self, dest, sources, dim):
+        self.dim = dim
+        super().__init__(dest, sources)
+
     def initialize(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_div, d_h,
                    d_htmp, d_h0, d_u, d_v, d_w, d_wij, d_f, d_hnurho,
                    d_hnu):
@@ -628,10 +631,12 @@ class WallBoundary1(Equation):
             d_hnurho[d_idx] = d_hnurho[d_idx] / d_wij[d_idx]
             d_hnu[d_idx] = d_hnu[d_idx] / d_wij[d_idx]
 
+
 class WallBoundary2(Equation):
-    def __init__(self,dest,sources,dim):
-        self.dim=dim
-        super().__init__(dest,sources)
+    def __init__(self, dest, sources, dim):
+        self.dim = dim
+        super().__init__(dest, sources)
+
     def initialize(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_div, d_h,
                    d_htmp, d_h0, d_u, d_v, d_w, d_wij, d_f, d_hnurho,
                    d_hnu):
@@ -671,4 +676,3 @@ class WallBoundary2(Equation):
             d_f[d_idx] = d_f[d_idx] / d_wij[d_idx]
             d_hnurho[d_idx] = d_hnurho[d_idx] / d_wij[d_idx]
             d_hnu[d_idx] = d_hnu[d_idx] / d_wij[d_idx]
-

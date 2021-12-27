@@ -4,7 +4,7 @@ from math import pi
 
 class CullenDehnenScheme(Scheme):
     def __init__(self, fluids, solids, dim, gamma, l, b, alphamax, Mh=None,
-                 Nh=None, m=None, h0=None,
+                 Nh=None, m=None, h0=None, fkern=1.0,
                  has_ghosts=False):
 
         self.fluids = fluids
@@ -17,23 +17,9 @@ class CullenDehnenScheme(Scheme):
         self.has_ghosts = has_ghosts
         self.alphamax = alphamax
         self.h0 = h0
-        if Mh is None and m is not None:
-            if Nh is None:
-                if self.dim == 1:
-                    Nh = 5
-                elif self.dim == 2:
-                    Nh = 13
-                elif self.dim == 3:
-                    Nh = 40
-            if self.dim == 1:
-                Vnu = 2.0
-            elif self.dim == 2:
-                Vnu = pi
-            elif self.dim == 3:
-                Vnu = 4.0 * pi / 3.0
-
-            Mh = m * Nh / Vnu
-        self.Mh = Mh
+        # Since hasattr() or try-except cannot be used inside equations,
+        # it is better take care of it here itself.
+        self.fkern = fkern
 
     def add_user_options(self, group):
         group.add_argument(
@@ -54,8 +40,7 @@ class CullenDehnenScheme(Scheme):
         from pysph.sph.gas_dynamics.cullen_dehnen.kernel import CubicSplineH1
         if kernel is None:
             kernel = CubicSplineH1(dim=self.dim)
-        if not hasattr(kernel, 'fkern'):
-            kernel.fkern = 1.0
+            self.fkern = kernel.fkern
 
         steppers = {}
         if extra_steppers is not None:
@@ -184,7 +169,7 @@ class CullenDehnenScheme(Scheme):
             )
             bwsweeps.append(
                 ViscosityDecayTimeScale(dest=fluid, sources=None,
-                                        l=self.l)
+                                        l=self.l, fkern=self.fkern)
             )
             bwsweeps.append(
                 AdaptIndividualViscosity(dest=fluid, sources=None)
