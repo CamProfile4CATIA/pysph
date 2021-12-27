@@ -570,15 +570,18 @@ class ArtificialViscocity(Equation):
                 d_aw[d_idx] -= s_m[s_idx] * XIJ[2] * Piijby2 * inparentheses
                 d_ae[d_idx] += s_m[s_idx] * vijdotxij * Piijby2 * nbdi * tilwij
 
-
+# Strictly, these wall boundary equations are not a part of cullen dehnen
+# paper. These are from pysph.sph.gas_dynamics.boundary_equations.WallBoundary
+# with modifications just so that this scheme can be used to run tests with
+# solid walls.
 class WallBoundary1(Equation):
     def __init__(self, dest, sources, dim):
         self.dim = dim
         super().__init__(dest, sources)
 
-    def initialize(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_div, d_h,
+    def initialize(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_h,
                    d_htmp, d_h0, d_u, d_v, d_w, d_wij, d_f, d_hnurho,
-                   d_hnu):
+                   d_hnu, d_divv):
         d_p[d_idx] = 0.0
         d_u[d_idx] = 0.0
         d_v[d_idx] = 0.0
@@ -587,7 +590,7 @@ class WallBoundary1(Equation):
         d_rho[d_idx] = 0.0
         d_e[d_idx] = 0.0
         d_cs[d_idx] = 0.0
-        d_div[d_idx] = 0.0
+        d_divv[d_idx] = 0.0
         d_wij[d_idx] = 0.0
         d_h[d_idx] = d_h0[d_idx]
         d_htmp[d_idx] = 0.0
@@ -637,13 +640,13 @@ class WallBoundary2(Equation):
         self.dim = dim
         super().__init__(dest, sources)
 
-    def initialize(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_div, d_h,
+    def initialize(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_h,
                    d_htmp, d_h0, d_u, d_v, d_w, d_wij, d_f, d_hnurho,
-                   d_hnu):
+                   d_hnu, d_divv):
         d_p[d_idx] = 0.0
         d_rho[d_idx] = 0.0
         d_cs[d_idx] = 0.0
-        d_div[d_idx] = 0.0
+        d_divv[d_idx] = 0.0
         d_wij[d_idx] = 0.0
         d_h[d_idx] = d_h0[d_idx]
         d_htmp[d_idx] = 0.0
@@ -651,10 +654,9 @@ class WallBoundary2(Equation):
         d_hnu[d_idx] = 0.0
         d_hnurho[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, d_p, d_rho, d_e, d_m, d_cs, d_divv, d_h, d_u,
-             d_v, d_w, d_wij, d_htmp, s_p, s_rho, s_e, s_m, s_cs, s_h, s_divv,
-             s_u, s_v, s_w, WI, s_f, d_f, s_hnurho, d_hnurho, s_hnu,
-             d_hnu):
+    def loop(self, d_idx, s_idx, d_p, d_rho, d_cs, d_divv, d_wij, d_htmp, s_p,
+             s_rho, s_cs, s_h, s_divv,  WI, s_f, d_f, s_hnurho, d_hnurho,
+             s_hnu, d_hnu):
         d_wij[d_idx] += WI
         d_p[d_idx] += s_p[s_idx] * WI
         d_rho[d_idx] += s_rho[s_idx] * WI

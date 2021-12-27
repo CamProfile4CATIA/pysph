@@ -3,8 +3,8 @@ from math import pi
 
 
 class CullenDehnenScheme(Scheme):
-    def __init__(self, fluids, solids, dim, gamma, l, b, alphamax, Mh=None,
-                 Nh=None, m=None, h0=None, fkern=1.0,
+    def __init__(self, fluids, solids, dim, gamma, l, b, alphamax, h0=None,
+                 fkern=1.0,
                  has_ghosts=False):
 
         self.fluids = fluids
@@ -75,7 +75,8 @@ class CullenDehnenScheme(Scheme):
             FalseDetectionSuppressingLimiterXi, NovelShockIndicatorA,
             IndividualViscosityLocal, ViscosityDecayTimeScale,
             AdaptIndividualViscosity, UpdateGhostProps,
-            MomentumAndEnergy, ArtificialViscocity, WallBoundary1, WallBoundary2)
+            MomentumAndEnergy, ArtificialViscocity, WallBoundary1,
+            WallBoundary2)
 
         equations = []
 
@@ -105,10 +106,15 @@ class CullenDehnenScheme(Scheme):
 
         equations.append(Group(equations=adapt, update_nnps=True))
 
+        # Strictly, this wall boundary equation is not a part of
+        # Cullen Dehnen paper. These are from
+        # pysph.sph.gas_dynamics.boundary_equations.WallBoundary
+        # with modifications just so that this scheme can be used to run tests
+        # with solid walls.
         walleq1 = []
         for solid in self.solids:
             walleq1.append(WallBoundary1(solid, sources=self.fluids,
-                                         dim = self.dim))
+                                         dim=self.dim))
         equations.append(Group(equations=walleq1))
 
         sweep1 = []
@@ -177,6 +183,11 @@ class CullenDehnenScheme(Scheme):
 
         equations.append(Group(equations=bwsweeps, update_nnps=True))
 
+        # Strictly, this wall boundary equation is not a part of
+        # cullen dehnen paper. These are from
+        # pysph.sph.gas_dynamics.boundary_equations.WallBoundary
+        # with modifications just so that this scheme can be used to run tests
+        # with solid walls.
         walleq2 = []
         for solid in self.solids:
             walleq2.append(WallBoundary2(solid, sources=self.fluids,
@@ -204,12 +215,12 @@ class CullenDehnenScheme(Scheme):
         return equations
 
     def setup_properties(self, particles, clean=True):
-        from pysph.base.utils import get_particle_array_gasd
         import numpy
         particle_arrays = dict([(p.name, p) for p in particles])
-        dummy = get_particle_array_gasd(name='junk')
-        props = list(dummy.properties.keys())
-        output_props = dummy.output_property_arrays
+        output_props = ['x', 'y', 'z', 'u', 'v', 'w', 'p', 'rho', 'h']
+        props = ['tag', 'pid', 'gid', 'ah', 'x', 'u', 'z', 'h0', 'e', 'aw',
+                 'p', 'v', 'w', 'y', 'ae', 'cs', 'm', 'au', 'rho', 'h', 'av']
+
         add_props = ['hnurho', 'f', 'ftil', 'et', 'ut', 'vt', 'wt', 'D21',
                      'gradv20', 'invT10', 'invT00', 'invT20', 'invT11',
                      'invT02', 'D01', 'gradv01', 'gradv10', 'D10', 'D02',
