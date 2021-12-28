@@ -6,6 +6,7 @@ particles should simply advect in a periodic domain
 
 # NumPy and standard library imports
 import numpy
+from math import pi
 
 from pysph.base.nnps import DomainManager
 from pysph.base.utils import get_particle_array as gpa
@@ -13,6 +14,7 @@ from pysph.solver.application import Application
 
 from pysph.sph.scheme import GasDScheme, ADKEScheme, GSPHScheme, SchemeChooser
 from pysph.sph.wc.crksph import CRKSPHScheme
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 
 # PySPH tools
 from pysph.tools import uniform_distribution as ud
@@ -23,16 +25,13 @@ gamma = 1.4
 gamma1 = gamma - 1.0
 
 # solution parameters
-dt = 5e-3
 tf = 1.
-
 
 # domain size
 xmin = 0.
 xmax = 1.
 ymin = 0.
 ymax = 1.
-
 
 # scheme constants
 alpha1 = 1.0
@@ -47,20 +46,23 @@ class AccuracyTest2D(Application):
         self.xmax = xmax
         self.ymin = ymin
         self.ymax = ymax
-        self.ny = 128
-        self.nx = self.ny
-        self.dx = (self.xmax - self.xmin) / (self.nx)
         self.hdx = 2.
         self.p = 1.
         self.u = 1
         self.v = -1
         self.c_0 = 1.18
-        self.cfl = 0.1
+        self.cfl = 0.1 # 0.05 for cullen-dehnen scheme
 
     def add_user_options(self, group):
         group.add_argument(
-            "--nparticles", action="store", type=int, dest="nprt", default=256,
+            "--nparticles", action="store", type=int, dest="nprt", default=128,
             help="Number of particles in domain"
+        )
+        group.add_argument(
+            "--set-Mh", action="store", dest="set_Mh",
+            default='scheme', choices=['scheme', 'case'],
+            help="scheme : default number of neighbours according to scheme\
+              case: based on smoothing length of the case."
         )
 
     def consume_user_options(self):
@@ -68,6 +70,7 @@ class AccuracyTest2D(Application):
         self.ny = self.nx
         self.dx = (self.xmax - self.xmin) / (self.nx)
         self.dt = self.cfl * self.dx / self.c_0
+        self.set_Mh = self.options.set_Mh
 
     def create_domain(self):
         return DomainManager(
@@ -103,7 +106,7 @@ class AccuracyTest2D(Application):
         v = numpy.ones_like(x) * self.v
 
         # thermal energy from the ideal gas EOS
-        e = p/(gamma1*rho)
+        e = p / (gamma1 * rho)
 
         fluid = gpa(name='fluid', x=x, y=y, rho=rho, p=p, e=e, h=h, m=m,
                     h0=h.copy(), u=u, v=v)
@@ -111,6 +114,13 @@ class AccuracyTest2D(Application):
 
         print("2D Accuracy Test with %d particles"
               % (fluid.get_number_of_particles()))
+
+        if self.options.scheme == 'cullendehnen':
+            if self.set_Mh == 'scheme':
+                print("NOTE: Using 25 Neighbours as default 13 fails.")
+                fluid.add_property('Mh', data=max(fluid.m) * 25/pi)
+            if self.set_Mh == 'case':
+                fluid.add_property('Mh', data=max(fluid.rho) * fluid.h**dim)
 
         return [fluid, ]
 
@@ -140,8 +150,14 @@ class AccuracyTest2D(Application):
             niter=40, tol=1e-6, has_ghosts=True
         )
 
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
+            l=0.1, alphamax=2.0, b=1.0, has_ghosts=True
+        )
+
         s = SchemeChooser(
-            default='gsph', adke=adke, mpm=mpm, gsph=gsph, crksph=crksph
+            default='adke', adke=adke, mpm=mpm, gsph=gsph, crksph=crksph,
+            cullendehnen=cullendehnen
         )
         return s
 
@@ -158,6 +174,9 @@ class AccuracyTest2D(Application):
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
         elif self.options.scheme == 'crksph':
+            s.configure_solver(dt=self.dt, tf=self.tf,
+                               adaptive_timestep=False, pfreq=50)
+        elif self.options.scheme == 'cullendehnen':
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
 
