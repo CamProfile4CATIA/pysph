@@ -8,11 +8,13 @@ from pysph.sph.wc.crksph import CRKSPHScheme
 from pysph.sph.scheme import (
     ADKEScheme, SchemeChooser, GasDScheme, GSPHScheme
 )
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 from pysph.base.utils import get_particle_array as gpa
 from pysph.base.nnps import DomainManager
 from pysph.solver.application import Application
 from pysph.tools import uniform_distribution as ud
 import numpy
+from math import pi
 
 
 class HydrostaticBox(Application):
@@ -31,6 +33,18 @@ class HydrostaticBox(Application):
         self.hdx = 1.5
         self.dt = 1e-3
         self.tf = 10
+        self.dim = 2
+
+    def add_user_options(self, group):
+        group.add_argument(
+            "--set-Mh", action="store", dest="set_Mh",
+            default='scheme', choices=['scheme', 'case'],
+            help="scheme : default number of neighbours according to scheme\
+              case: based on smoothing length of the case."
+        )
+
+    def consume_user_options(self):
+        self.set_Mh = self.options.set_Mh
 
     def create_particles(self):
         data = ud.uniform_distribution_cubic2D(
@@ -49,10 +63,20 @@ class HydrostaticBox(Application):
 
         fluid = gpa(
             name='fluid', x=x, y=y, p=self.p, rho=rho, e=e, u=0., v=0.,
-            h=self.hdx*self.dx, m=m, h0=h
+            h=self.hdx * self.dx, m=m, h0=h
         )
 
         self.scheme.setup_properties([fluid])
+
+        if self.options.scheme == 'cullendehnen':
+            if self.set_Mh == 'scheme':
+                fluid.add_property('Mh', data=max(fluid.m) * (13.0 / 3.0) / pi)
+                print('Note: Using Gaussian kernel as Cubic Spline \n'
+                      'radius scale 1 does not work for this case.')
+                # 13.0 is divided by 3 to match the radius scale
+            if self.set_Mh == 'case':
+                fluid.add_property('Mh', data=self.rho0 * fluid.h ** self.dim)
+
         return [fluid]
 
     def create_domain(self):
@@ -84,9 +108,15 @@ class HydrostaticBox(Application):
         adke = ADKEScheme(
             fluids=['fluid'], solids=[], dim=2, gamma=self.gamma,
             alpha=0.1, beta=0.1, k=1.5, eps=0., g1=0.1, g2=0.1,
-            has_ghosts=True)
+            has_ghosts=True
+        )
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=[], dim=2, gamma=self.gamma,
+            l=0.05, alphamax=2.0, b=1.0, has_ghosts=True
+        )
         s = SchemeChooser(
-            default='crksph', crksph=crk, adke=adke, mpm=mpm, gsph=gsph
+            default='crksph', crksph=crk, adke=adke, mpm=mpm, gsph=gsph,
+            cullendehnen=cullendehnen
         )
         return s
 
@@ -108,6 +138,11 @@ class HydrostaticBox(Application):
         elif self.options.scheme == 'adke':
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
+        elif self.options.scheme == 'cullendehnen':
+            from pysph.base.kernels import Gaussian
+            s.configure_solver(dt=self.dt, tf=self.tf,
+                               adaptive_timestep=False, pfreq=50,
+                               kernel=Gaussian(dim=self.dim))
 
 
 if __name__ == "__main__":
