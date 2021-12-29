@@ -11,6 +11,7 @@ from pysph.base.utils import get_particle_array as gpa
 from pysph.base.nnps import DomainManager
 from pysph.solver.application import Application
 from pysph.sph.scheme import GSPHScheme, SchemeChooser, ADKEScheme, GasDScheme
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 from pysph.sph.wc.crksph import CRKSPHScheme
 from pysph.examples.gas_dynamics.riemann_2d_config import R2DConfig
 
@@ -37,7 +38,7 @@ class Riemann2D(Application):
             "--dscheme", choices=["constant_mass", "constant_volume"],
             dest="dscheme", default="constant_volume",
             help="spatial discretization scheme, one of constant_mass"
-            "or constant_volume"
+                 "or constant_volume"
         )
         group.add_argument(
             "--nparticles", action="store", type=int,
@@ -71,7 +72,7 @@ class Riemann2D(Application):
         rho2, u2, v2, p2 = config.rho2, config.u2, config.v2, config.p2
         rho3, u3, v3, p3 = config.rho3, config.u3, config.v3, config.p3
         rho4, u4, v4, p4 = config.rho4, config.u4, config.v4, config.p4
-        x, y = numpy.mgrid[xmin+dx2:xmax:dx, ymin+dx2:ymax:dx]
+        x, y = numpy.mgrid[xmin + dx2:xmax:dx, ymin + dx2:ymax:dx]
 
         x = x.ravel()
         y = y.ravel()
@@ -90,7 +91,7 @@ class Riemann2D(Application):
                     p[i] = p3
                     u[i] = u3
                     v[i] = v3
-                else:            # w2
+                else:  # w2
                     rho[i] = rho2
                     p[i] = p2
                     u[i] = u2
@@ -101,20 +102,20 @@ class Riemann2D(Application):
                     p[i] = p4
                     u[i] = u4
                     v[i] = v4
-                else:            # w1
+                else:  # w1
                     rho[i] = rho1
                     p[i] = p1
                     u[i] = u1
                     v[i] = v1
 
         # thermal energy
-        e = p/(gamma1 * rho)
+        e = p / (gamma1 * rho)
 
         # mass
         m = vol * rho
 
         # smoothing length
-        h = kernel_factor * (m/rho)**(1./dim)
+        h = kernel_factor * (m / rho) ** (1. / dim)
 
         # create the particle array
         pa = gpa(name='fluid', x=x, y=y, m=m, rho=rho, h=h,
@@ -133,16 +134,16 @@ class Riemann2D(Application):
         ymid = config.ymid
 
         rho_max = config.rho_max
-        nb4 = self.nx/4
-        dx0 = (xmax - xmid)/nb4
+        nb4 = self.nx / 4
+        dx0 = (xmax - xmid) / nb4
         vol0 = dx0 * dx0
         m0 = rho_max * vol0
 
         # first quadrant
-        vol1 = config.rho_max/config.rho1 * vol0
+        vol1 = config.rho_max / config.rho1 * vol0
         dx = numpy.sqrt(vol1)
         dxb2 = 0.5 * dx
-        x1, y1 = numpy.mgrid[xmid+dxb2:xmax:dx, ymid+dxb2:ymax:dx]
+        x1, y1 = numpy.mgrid[xmid + dxb2:xmax:dx, ymid + dxb2:ymax:dx]
         x1 = x1.ravel()
         y1 = y1.ravel()
 
@@ -151,13 +152,13 @@ class Riemann2D(Application):
         rho1 = numpy.ones_like(x1) * config.rho1
         p1 = numpy.ones_like(x1) * config.p1
         m1 = numpy.ones_like(x1) * m0
-        h1 = numpy.ones_like(x1) * kernel_factor * (m1/rho1)**(0.5)
+        h1 = numpy.ones_like(x1) * kernel_factor * (m1 / rho1) ** 0.5
 
         # second quadrant
-        vol2 = config.rho_max/config.rho2 * vol0
+        vol2 = config.rho_max / config.rho2 * vol0
         dx = numpy.sqrt(vol2)
         dxb2 = 0.5 * dx
-        x2, y2 = numpy.mgrid[xmid-dxb2:xmin:-dx, ymid+dxb2:ymax:dx]
+        x2, y2 = numpy.mgrid[xmid - dxb2:xmin:-dx, ymid + dxb2:ymax:dx]
         x2 = x2.ravel()
         y2 = y2.ravel()
         u2 = numpy.ones_like(x2) * config.u2
@@ -165,13 +166,13 @@ class Riemann2D(Application):
         rho2 = numpy.ones_like(x2) * config.rho2
         p2 = numpy.ones_like(x2) * config.p2
         m2 = numpy.ones_like(x2) * m0
-        h2 = numpy.ones_like(x2) * kernel_factor * (m2/rho2)**(0.5)
+        h2 = numpy.ones_like(x2) * kernel_factor * (m2 / rho2) ** 0.5
 
         # third quadrant
-        vol3 = config.rho_max/config.rho3 * vol0
+        vol3 = config.rho_max / config.rho3 * vol0
         dx = numpy.sqrt(vol3)
         dxb2 = 0.5 * dx
-        x3, y3 = numpy.mgrid[xmid-dxb2:xmin:-dx, ymid-dxb2:ymin:-dx]
+        x3, y3 = numpy.mgrid[xmid - dxb2:xmin:-dx, ymid - dxb2:ymin:-dx]
         x3 = x3.ravel()
         y3 = y3.ravel()
 
@@ -180,13 +181,13 @@ class Riemann2D(Application):
         rho3 = numpy.ones_like(x3) * config.rho3
         p3 = numpy.ones_like(x3) * config.p3
         m3 = numpy.ones_like(x3) * m0
-        h3 = numpy.ones_like(x3) * kernel_factor * (m3/rho3)**(0.5)
+        h3 = numpy.ones_like(x3) * kernel_factor * (m3 / rho3) ** 0.5
 
         # fourth quadrant
-        vol4 = config.rho_max/config.rho4 * vol0
+        vol4 = config.rho_max / config.rho4 * vol0
         dx = numpy.sqrt(vol4)
         dxb2 = 0.5 * dx
-        x4, y4 = numpy.mgrid[xmid+dxb2:xmax:dx, ymid-dxb2:ymin:-dx]
+        x4, y4 = numpy.mgrid[xmid + dxb2:xmax:dx, ymid - dxb2:ymin:-dx]
         x4 = x4.ravel()
         y4 = y4.ravel()
 
@@ -195,7 +196,7 @@ class Riemann2D(Application):
         rho4 = numpy.ones_like(x4) * config.rho4
         p4 = numpy.ones_like(x4) * config.p4
         m4 = numpy.ones_like(x4) * m0
-        h4 = numpy.ones_like(x4) * kernel_factor * (m4/rho4)**(0.5)
+        h4 = numpy.ones_like(x4) * kernel_factor * (m4 / rho4) ** 0.5
 
         # concatenate the arrays
         x = numpy.concatenate([x1, x2, x3, x4])
@@ -208,7 +209,7 @@ class Riemann2D(Application):
         rho = numpy.concatenate([rho1, rho2, rho3, rho4])
 
         # derived variables
-        e = p/((gamma-1.0) * rho)
+        e = p / ((gamma - 1.0) * rho)
 
         # create the particle array
         pa = gpa(
@@ -221,7 +222,6 @@ class Riemann2D(Application):
     def create_particles(self):
         fluid = self.dfunction()
         self.scheme.setup_properties([fluid])
-
         return [fluid]
 
     def create_domain(self):
@@ -256,9 +256,14 @@ class Riemann2D(Application):
             beta=2.0, update_alpha1=True, update_alpha2=True,
             has_ghosts=True
         )
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=[], dim=2, gamma=gamma,
+            l=0.1, alphamax=2.0, b=1.0, has_ghosts=True
+        )
 
         s = SchemeChooser(
-            default='gsph', gsph=gsph, adke=adke, crksph=crksph, mpm=mpm
+            default='gsph', gsph=gsph, adke=adke, crksph=crksph, mpm=mpm,
+            cullendehnen=cullendehnen
         )
         return s
 
@@ -275,6 +280,9 @@ class Riemann2D(Application):
                                adaptive_timestep=False, pfreq=50)
         elif self.options.scheme == 'mpm':
             s.configure(kernel_factor=kernel_factor)
+            s.configure_solver(dt=self.dt, tf=self.tf,
+                               adaptive_timestep=False, pfreq=50)
+        elif self.options.scheme == 'cullendehnen':
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
 
