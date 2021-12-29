@@ -14,7 +14,6 @@ where :math:`\lambda` is the domain length.
         \rho_0 = \gamma = 1.4 and p_0 = 1.0
 """
 
-
 # standard library and numpy imports
 import numpy
 
@@ -25,6 +24,7 @@ from pysph.solver.application import Application
 from pysph.sph.scheme import \
     GSPHScheme, ADKEScheme, GasDScheme, SchemeChooser
 from pysph.sph.wc.crksph import CRKSPHScheme
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 
 
 class AcousticWave(Application):
@@ -40,7 +40,6 @@ class AcousticWave(Application):
         self.domain_length = self.xmax - self.xmin
         self.k = -2 * numpy.pi / self.domain_length
         self.cfl = 0.1
-        self.hdx = 1.0
         self.dt = 1e-3
         self.tf = 5
         self.dim = 1
@@ -55,11 +54,23 @@ class AcousticWave(Application):
             "--nparticles", action="store", type=int, dest="nprt", default=256,
             help="Number of particles in domain"
         )
+        group.add_argument(
+            "--hdx", action="store", type=float,
+            dest="hdx", default=1.2,
+            help="Ratio h/dx."
+        )
+        group.add_argument(
+            "--set-Mh", action="store", dest="set_Mh",
+            default='scheme', choices=['scheme', 'case'],
+            help="scheme : default number of neighbours according to scheme\
+              case: based on smoothing length of the case.")
 
     def consume_user_options(self):
+        self.hdx = self.options.hdx
         self.n_particles = self.options.nprt
         self.dx = self.domain_length / (self.n_particles)
         self.dt = self.cfl * self.dx / self.c_0
+        self.set_Mh = self.options.set_Mh
 
     def create_particles(self):
         x = numpy.arange(
@@ -68,10 +79,10 @@ class AcousticWave(Application):
         rho = self.rho_0 + self.delta_rho *\
             numpy.sin(self.k * x)
 
-        p = self.p_0 + self.c_0**2 *\
+        p = self.p_0 + self.c_0 ** 2 * \
             self.delta_rho * numpy.sin(self.k * x)
 
-        u = self.c_0 * self.delta_rho * numpy.sin(self.k * x) /\
+        u = self.c_0 * self.delta_rho * numpy.sin(self.k * x) / \
             self.rho_0
         cs = numpy.sqrt(
             self.gamma * p / rho
@@ -84,7 +95,10 @@ class AcousticWave(Application):
             h0=h.copy()
         )
         self.scheme.setup_properties([fluid])
-
+        if self.options.scheme == 'cullendehnen':
+            if self.set_Mh == 'case':
+                h = max(fluid.h)
+                fluid.add_property('Mh', data=max(fluid.rho) * h ** self.dim)
         return [fluid, ]
 
     def create_scheme(self):
@@ -113,9 +127,14 @@ class AcousticWave(Application):
             alpha=0, beta=0.0, k=1.5, eps=0.0, g1=0.0, g2=0.0,
             has_ghosts=True)
 
-        s = SchemeChooser(
-            default='gsph', gsph=gsph, mpm=mpm, crksph=crksph, adke=adke
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=[], dim=self.dim, gamma=self.gamma,
+            l=0.1, alphamax=2.0, b=0, has_ghosts=True
         )
+
+        s = SchemeChooser(
+            default='adke', adke=adke, mpm=mpm, gsph=gsph, crksph=crksph,
+            cullendehnen=cullendehnen)
 
         return s
 
@@ -140,15 +159,20 @@ class AcousticWave(Application):
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
 
+        elif self.options.scheme == 'cullendehnen':
+            s.configure_solver(dt=self.dt, tf=self.tf,
+                               adaptive_timestep=False, pfreq=50)
+
     def post_process(self):
         from pysph.solver.utils import load
+        import os
         if len(self.output_files) < 1:
             return
         outfile = self.output_files[-1]
         data = load(outfile)
         pa = data['arrays']['fluid']
         x_c = pa.x
-        u = self.c_0 * self.delta_rho * numpy.sin(self.k * x_c) /\
+        u = self.c_0 * self.delta_rho * numpy.sin(self.k * x_c) / \
             self.rho_0
         u_c = pa.u
         l_inf = numpy.max(
@@ -160,8 +184,8 @@ class AcousticWave(Application):
         print("L_inf norm of velocity for the problem: %s" % (l_inf))
         print("L_1 norm of velocity for the problem: %s" % (l_1))
 
-        rho = self.rho_0 + self.delta_rho *\
-            numpy.sin(self.k * x_c)
+        rho = self.rho_0 + self.delta_rho * \
+              numpy.sin(self.k * x_c)
 
         rho_c = pa.rho
         l1 = numpy.sum(
@@ -169,6 +193,8 @@ class AcousticWave(Application):
         )
         l1 = l1 / self.n_particles
         print("l_1 norm of density for the problem: %s" % (l1))
+        fname = os.path.join(self.output_dir, 'norms.npz')
+        numpy.savez(fname, linf_vel=l_inf, l1_vel=l_1, l1_rho=l1)
 
 
 if __name__ == "__main__":
