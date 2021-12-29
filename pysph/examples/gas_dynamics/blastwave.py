@@ -4,7 +4,7 @@ import os
 import numpy
 from pysph.examples.gas_dynamics.shocktube_setup import ShockTubeSetup
 from pysph.sph.scheme import ADKEScheme, GasDScheme, GSPHScheme, SchemeChooser
-
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 
 # Numerical constants
 dim = 1
@@ -32,6 +32,7 @@ class Blastwave(ShockTubeSetup):
         self.pr = 0.01
         self.ul = 0.0
         self.ur = 0.0
+        self.dim = dim
 
     def add_user_options(self, group):
         group.add_argument(
@@ -43,16 +44,23 @@ class Blastwave(ShockTubeSetup):
             "--nl", action="store", type=float, dest="nl", default=200,
             help="Number of particles in left region"
         )
+        group.add_argument(
+            "--set-Mh", action="store", dest="set_Mh",
+            default='scheme', choices=['scheme', 'case'],
+            help="scheme : default number of neighbours according to scheme\
+              case: based on smoothing length of the case."
+        )
 
     def consume_user_options(self):
         self.nl = self.options.nl
         self.hdx = self.options.hdx
-        ratio = self.rhor/self.rhol
-        self.nr = ratio*self.nl
-        self.dxl = 0.5/self.nl
-        self.dxr = 0.5/self.nr
+        ratio = self.rhor / self.rhol
+        self.nr = ratio * self.nl
+        self.dxl = 0.5 / self.nl
+        self.dxr = 0.5 / self.nr
         self.h0 = self.hdx * self.dxr
         self.hdx = self.hdx
+        self.set_Mh = self.options.set_Mh
 
     def create_particles(self):
         return self.generate_particles(xmin=-0.5, xmax=0.5, dxl=self.dxl,
@@ -82,7 +90,14 @@ class Blastwave(ShockTubeSetup):
             niter=20, tol=1e-6
         )
 
-        s = SchemeChooser(default='adke', adke=adke, gsph=gsph)
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=['boundary'], dim=dim, gamma=gamma,
+            l=0.05, alphamax=2.0, b=1.0
+        )
+
+        s = SchemeChooser(default='adke', adke=adke, gsph=gsph,
+                          cullendehnen=cullendehnen)
+
         return s
 
 
