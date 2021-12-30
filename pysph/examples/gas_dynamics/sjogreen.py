@@ -81,7 +81,7 @@ class SjoGreen(ShockTubeSetup):
             if self.set_Mh == 'scheme':
                 print("NOTE: This case does not work with CubicSplineH1 kernel"
                       ". So, using Gaussian kernel by default.")
-                f.add_property('Mh', data=self.dxl * 5.0 / 2.0)
+                f.add_property('Mh', data=self.dxl * 5.0 / 6.0)
             if self.set_Mh == 'case':
                 f.add_property('Mh', data=self.h0 * self.rhol)
         return [f]
