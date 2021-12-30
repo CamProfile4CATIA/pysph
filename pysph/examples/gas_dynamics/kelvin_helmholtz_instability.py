@@ -8,14 +8,14 @@ import numpy
 from pysph.base.utils import get_particle_array as gpa
 from pysph.solver.application import Application
 from pysph.sph.scheme import GasDScheme, SchemeChooser, ADKEScheme, GSPHScheme
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 from pysph.sph.wc.crksph import CRKSPHScheme
 from pysph.base.nnps import DomainManager
 from pysph.tools import uniform_distribution as ud
 
-
 # problem constants
 dim = 2
-gamma = 5.0/3.0
+gamma = 5.0 / 3.0
 
 xmin = ymin = 0.0
 xmax = ymax = 1.0
@@ -44,6 +44,15 @@ class KHInstability(Application):
         self.dy = self.dx
         self.hdx = 1.5
 
+    def add_user_options(self, group):
+        group.add_argument(
+            "--const-MN", choices=["M", "N"],
+            dest="const_MN", default="M",
+        )
+
+    def consume_user_options(self):
+        self.const_MN = self.options.const_MN
+
     def create_particles(self):
         data = ud.uniform_distribution_cubic2D(
             self.dx, xmin, xmax, ymin, ymax
@@ -68,15 +77,15 @@ class KHInstability(Application):
             (y >= 0.75) & (y < 1.0)
         )[0]
 
-        rho1 = rhoi_1 - rhoi_m * numpy.exp((y[y1] - 0.25)/delta)
-        rho2 = rhoi_2 + rhoi_m * numpy.exp((0.25 - y[y2])/delta)
-        rho3 = rhoi_2 + rhoi_m * numpy.exp((y[y3] - 0.75)/delta)
-        rho4 = rhoi_1 - rhoi_m * numpy.exp((0.75 - y[y4])/delta)
+        rho1 = rhoi_1 - rhoi_m * numpy.exp((y[y1] - 0.25) / delta)
+        rho2 = rhoi_2 + rhoi_m * numpy.exp((0.25 - y[y2]) / delta)
+        rho3 = rhoi_2 + rhoi_m * numpy.exp((y[y3] - 0.75) / delta)
+        rho4 = rhoi_1 - rhoi_m * numpy.exp((0.75 - y[y4]) / delta)
 
-        u1 = v_i1 - v_im * numpy.exp((y[y1] - 0.25)/delta)
-        u2 = v_i2 + v_im * numpy.exp((0.25 - y[y2])/delta)
-        u3 = v_i2 + v_im * numpy.exp((y[y3] - 0.75)/delta)
-        u4 = v_i1 - v_im * numpy.exp((0.75 - y[y4])/delta)
+        u1 = v_i1 - v_im * numpy.exp((y[y1] - 0.25) / delta)
+        u2 = v_i2 + v_im * numpy.exp((0.25 - y[y2]) / delta)
+        u3 = v_i2 + v_im * numpy.exp((y[y3] - 0.75) / delta)
+        u4 = v_i1 - v_im * numpy.exp((0.75 - y[y4]) / delta)
 
         v = dely * numpy.sin(
             2 * numpy.pi * x / wavelen
@@ -116,6 +125,13 @@ class KHInstability(Application):
         )
 
         self.scheme.setup_properties([fluid])
+        if self.options.scheme == 'cullendehnen':
+            if self.const_MN == "M":
+                fluid.add_property('Mh',
+                                   data=numpy.mean(fluid.m) * (13 / 3) / 3.14)
+            elif self.const_MN == "N":
+                fluid.add_property('Mh',
+                                   data=fluid.m * (13 / 3) / 3.14)
         return [fluid]
 
     def create_domain(self):
@@ -150,8 +166,14 @@ class KHInstability(Application):
             niter=40, tol=1e-6, has_ghosts=True
         )
 
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
+            l=0.1, alphamax=2.0, b=1.0, has_ghosts=True
+        )
+
         s = SchemeChooser(
-            default='crksph', crksph=crk, gsph=gsph, adke=adke, mpm=mpm
+            default='crksph', crksph=crk, gsph=gsph, adke=adke, mpm=mpm,
+            cullendehnen=cullendehnen
         )
 
         return s
@@ -172,6 +194,11 @@ class KHInstability(Application):
         elif self.options.scheme == 'gsph':
             s.configure_solver(dt=dt, tf=tf,
                                adaptive_timestep=False, pfreq=50)
+        elif self.options.scheme == 'cullendehnen':
+            from pysph.base.kernels import Gaussian
+            s.configure_solver(dt=dt, tf=tf,
+                               adaptive_timestep=False, pfreq=50,
+                               kernel=Gaussian(dim=dim))
 
 
 if __name__ == "__main__":
