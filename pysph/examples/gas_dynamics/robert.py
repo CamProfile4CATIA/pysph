@@ -3,6 +3,7 @@
 
 from pysph.examples.gas_dynamics.shocktube_setup import ShockTubeSetup
 from pysph.sph.scheme import ADKEScheme, GasDScheme, GSPHScheme, SchemeChooser
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 import numpy
 
 # Numerical constants
@@ -42,25 +43,43 @@ class Robert(ShockTubeSetup):
             "--nl", action="store", type=float, dest="nl", default=1930,
             help="Number of particles in left region"
         )
+        group.add_argument(
+            "--set-Mh", action="store", dest="set_Mh",
+            default='scheme', choices=['scheme', 'case'],
+            help="scheme : default number of neighbours according to scheme\
+              case: based on smoothing length of the case."
+        )
 
     def consume_user_options(self):
         self.nl = self.options.nl
         self.hdx = self.options.hdx
-        ratio = self.rhor/self.rhol
+        ratio = self.rhor / self.rhol
         self.xb_ratio = 2
-        self.nr = ratio*self.nl
-        self.dxl = 0.5/self.nl
-        self.dxr = 0.5/self.nr
+        self.nr = ratio * self.nl
+        self.dxl = 0.5 / self.nl
+        self.dxr = 0.5 / self.nr
         self.h0 = self.hdx * self.dxr
-        self.hdx = self.hdx
+        self.set_Mh = self.options.set_Mh
 
     def create_particles(self):
-        return self.generate_particles(xmin=self.xmin*self.xb_ratio,
-                                       xmax=self.xmax*self.xb_ratio,
+        f, b = self.generate_particles(xmin=self.xmin * self.xb_ratio,
+                                       xmax=self.xmax * self.xb_ratio,
                                        dxl=self.dxl, dxr=self.dxr,
                                        m=self.dxr, pl=self.pl, pr=self.pr,
                                        h0=self.h0, bx=0.03, gamma1=gamma1,
                                        ul=self.ul, ur=self.ur)
+
+        self.scheme.setup_properties([f, b])
+        if self.options.scheme == 'cullendehnen':
+            if self.set_Mh == 'scheme':
+                print("NOTE: Using CubicSplineH1 or using 5 neighbours per"
+                      "particle does not work for this case. So, reverting to"
+                      "self.set_Mh == 'case'")
+                f.add_property('Mh', data=self.h0 * self.rhor)
+            if self.set_Mh == 'case':
+                f.add_property('Mh', data=self.h0 * self.rhor)
+
+        return [f]
 
     def create_scheme(self):
         self.dt = dt
@@ -83,8 +102,41 @@ class Robert(ShockTubeSetup):
             niter=40, tol=1e-6
         )
 
-        s = SchemeChooser(default='adke', adke=adke, mpm=mpm, gsph=gsph)
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
+            l=0.05, alphamax=2.0, b=1.0, has_ghosts=True
+        )
+
+        s = SchemeChooser(default='adke', adke=adke, mpm=mpm, gsph=gsph,
+                          cullendehnen=cullendehnen)
         return s
+
+    def configure_scheme(self):
+        s = self.scheme
+        dxl = 0.5 / self.nl
+        ratio = self.rhor / self.rhol
+        nr = ratio * self.nl
+        dxr = 0.5 / self.nr
+        h0 = self.hdx * self.dxr
+        kernel_factor = self.options.hdx
+        if self.options.scheme == 'mpm':
+            s.configure(kernel_factor=kernel_factor)
+            s.configure_solver(dt=self.dt, tf=self.tf,
+                               adaptive_timestep=True, pfreq=50)
+        elif self.options.scheme == 'adke':
+            s.configure_solver(dt=self.dt, tf=self.tf,
+                               adaptive_timestep=False, pfreq=50)
+        elif self.options.scheme == 'gsph':
+            s.configure_solver(dt=self.dt, tf=self.tf,
+                               adaptive_timestep=False, pfreq=50)
+        elif self.options.scheme == 'crk':
+            s.configure_solver(dt=self.dt, tf=self.tf,
+                               adaptive_timestep=False, pfreq=1)
+        elif self.options.scheme == 'cullendehnen':
+            from pysph.base.kernels import Gaussian
+            s.configure_solver(dt=self.dt, tf=self.tf,
+                               adaptive_timestep=False, pfreq=50,
+                               kernel=Gaussian(dim=dim))
 
 
 if __name__ == '__main__':
