@@ -2,6 +2,7 @@
 """
 from pysph.examples.gas_dynamics.shocktube_setup import ShockTubeSetup
 from pysph.sph.scheme import ADKEScheme, GasDScheme, GSPHScheme, SchemeChooser
+from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
 
 # Numerical constants
 dim = 1
@@ -29,6 +30,7 @@ class WallShock(ShockTubeSetup):
         self.pr = 4e-7
         self.ul = 1.0
         self.ur = -1.0
+        self.dim = dim
 
     def add_user_options(self, group):
         group.add_argument(
@@ -36,29 +38,40 @@ class WallShock(ShockTubeSetup):
             dest="hdx", default=1.5,
             help="Ratio h/dx."
         )
+
         group.add_argument(
             "--nl", action="store", type=float, dest="nl", default=500,
             help="Number of particles in left region"
         )
 
+        group.add_argument(
+            "--set-Mh", action="store", dest="set_Mh",
+            default='scheme', choices=['scheme', 'case'],
+            help="scheme : default number of neighbours according to scheme\
+              case: based on smoothing length of the case."
+        )
+
     def consume_user_options(self):
         self.nl = self.options.nl
         self.hdx = self.options.hdx
-        ratio = self.rhor/self.rhol
-        self.nr = ratio*self.nl
+        ratio = self.rhor / self.rhol
+        self.nr = ratio * self.nl
         self.xb_ratio = 5
         self.dxl = (self.x0 - self.xmin) / self.nl
         self.dxr = (self.xmax - self.x0) / self.nr
         self.h0 = self.hdx * self.dxr
         self.hdx = self.hdx
+        self.set_Mh = self.options.set_Mh
 
     def create_particles(self):
-        return self.generate_particles(xmin=self.xmin*self.xb_ratio,
-                                       xmax=self.xmax*self.xb_ratio,
+        f, b = self.generate_particles(xmin=self.xmin * self.xb_ratio,
+                                       xmax=self.xmax * self.xb_ratio,
                                        dxl=self.dxl, dxr=self.dxr,
                                        m=self.dxl, pl=self.pl,
                                        pr=self.pr, h0=self.h0, bx=0.02,
                                        gamma1=gamma1, ul=self.ul, ur=self.ur)
+
+        return [f, b]
 
     def create_scheme(self):
         self.dt = dt
@@ -81,8 +94,14 @@ class WallShock(ShockTubeSetup):
             interface_zero=True, hybrid=False, blend_alpha=2.0,
             niter=40, tol=1e-6
         )
+        cullendehnen = CullenDehnenScheme(
+            fluids=['fluid'], solids=['boundary'], dim=dim, gamma=gamma,
+            l=0.1, alphamax=2.0, b=1.0
+        )
 
-        s = SchemeChooser(default='adke', adke=adke, mpm=mpm, gsph=gsph)
+        s = SchemeChooser(default='adke', adke=adke, mpm=mpm, gsph=gsph,
+                          cullendehnen=cullendehnen)
+
         return s
 
 
