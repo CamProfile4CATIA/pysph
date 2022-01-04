@@ -119,7 +119,7 @@ class AccuracyTest2D(Application):
             if self.set_Mh == 'scheme':
                 print("NOTE: Using 25 Neighbours as default 13 fails.")
                 fluid.add_property('Mh', data=max(fluid.m) * 25/pi)
-            if self.set_Mh == 'case':
+            elif self.set_Mh == 'case':
                 fluid.add_property('Mh', data=max(fluid.rho) * fluid.h**dim)
 
         return [fluid, ]
