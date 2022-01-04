@@ -1,5 +1,8 @@
-from pysph.sph.scheme import Scheme, add_bool_argument
 from math import pi
+
+from pysph.sph.equation import Group
+from pysph.sph.gas_dynamics.cullen_dehnen.equations import *
+from pysph.sph.scheme import Scheme
 
 
 class CullenDehnenScheme(Scheme):
@@ -66,18 +69,6 @@ class CullenDehnenScheme(Scheme):
         )
 
     def get_equations(self):
-        from pysph.sph.equation import Group
-        from pysph.sph.gas_dynamics.cullen_dehnen.equations import (
-            SummationDensity, Factorf,
-            AdjustSmoothingLength, SmoothingLengthRate, VelocityGradient,
-            VelocityDivergence, AcclerationGradient, VelocityDivergenceRate,
-            TracelessSymmetricStrainRate, ShockIndicatorR, EOS, SignalVelocity,
-            FalseDetectionSuppressingLimiterXi, NovelShockIndicatorA,
-            IndividualViscosityLocal, ViscosityDecayTimeScale,
-            AdaptIndividualViscosity, UpdateGhostProps,
-            MomentumAndEnergy, ArtificialViscocity, WallBoundary1,
-            WallBoundary2)
-
         equations = []
 
         sweep0 = []
@@ -235,9 +226,15 @@ class CullenDehnenScheme(Scheme):
         props.extend(add_props)
 
         # For Mh.
-        # Per se, Mh is supposed to be a global constant and
-        # need not be set here like this. This just provides allows the
-        # flexibility to try running with different Mh for each particle
+        # According to the paper, Mh is supposed to be a global constant and
+        # need not be set here per particle. Constant Mh throughout the domain
+        # would mean striving for constant mass inside the kernel
+        # and would lead to a different number of neighbours
+        # for heavy and light particles. Letting Mh be a particle property
+        # allows the flexibility to run with different Mh for each
+        # particle, making it possible to have variable mass inside the kernel
+        # while keeping the number of neighbours constant while also making
+        # it possible to go with constant mass inside the kernel as required.
 
         if self.dim == 1:
             Nh = 5.0
