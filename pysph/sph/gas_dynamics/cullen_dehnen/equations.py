@@ -1,6 +1,8 @@
 from pysph.sph.equation import Equation
 from math import exp, sqrt
 from pysph.base.particle_array import get_ghost_tag
+from compyle.api import declare
+from pysph.sph.wc.linalg import identity, gj_solve, augmented_matrix, mat_mult
 
 GHOST_TAG = get_ghost_tag()
 
@@ -92,6 +94,9 @@ class VelocityGradient(Equation):
         self.dim = dim
         super().__init__(dest, sources)
 
+    def _get_helpers_(self):
+        return [augmented_matrix, gj_solve, identity, mat_mult]
+
     def initialize(
             self, d_idx, d_invT00, d_invT01, d_invT02, d_invT10, d_invT11,
             d_invT12, d_invT20, d_invT21, d_invT22, d_D00, d_D01, d_D02, d_D10,
@@ -162,36 +167,43 @@ class VelocityGradient(Equation):
             d_D11, d_D12, d_D20, d_D21, d_D22, d_gradv00, d_gradv01,
             d_gradv02, d_gradv10, d_gradv11, d_gradv12, d_gradv20,
             d_gradv21, d_gradv22):
-        T00 = d_invT00[d_idx]
-        T01 = d_invT01[d_idx]
-        T02 = d_invT02[d_idx]
 
-        T10 = d_invT10[d_idx]
-        T11 = d_invT11[d_idx]
-        T12 = d_invT12[d_idx]
+        T = declare('matrix(9)')
+        invT = declare('matrix(9)')
+        augT = declare('matrix(18)')
+        idmat = declare('matrix(9)')
 
-        T20 = d_invT20[d_idx]
-        T21 = d_invT21[d_idx]
-        T22 = d_invT22[d_idx]
+        T[3 * 0 + 0] = d_invT00[d_idx]
+        T[3 * 0 + 1] = d_invT01[d_idx]
+        T[3 * 0 + 2] = d_invT02[d_idx]
+
+        T[3 * 1 + 0] = d_invT10[d_idx]
+        T[3 * 1 + 1] = d_invT11[d_idx]
+        T[3 * 1 + 2] = d_invT12[d_idx]
+
+        T[3 * 2 + 0] = d_invT20[d_idx]
+        T[3 * 2 + 1] = d_invT21[d_idx]
+        T[3 * 2 + 2] = d_invT22[d_idx]
 
         if self.dim == 1:
-            T11 = 1.0
-            T22 = 1.0
+            T[3 * 1 + 1] = 1.0
+            T[3 * 2 + 2] = 1.0
         elif self.dim == 2:
-            T22 = 1.0
+            T[3 * 2 + 2] = 1.0
 
-        det = (T00 * T11 * T22 - T00 * T12 * T21 - T01 * T10 * T22 +
-               T01 * T12 * T20 + T02 * T10 * T21 - T02 * T11 * T20)
+        identity(idmat, 3)
+        augmented_matrix(T, idmat, 3, 3, 3, augT)
+        gj_solve(augT, 3, 3, invT)
 
-        d_invT00[d_idx] = (T11 * T22 - T12 * T21) / det
-        d_invT01[d_idx] = (T10 * T22 - T12 * T20) / det
-        d_invT02[d_idx] = (T10 * T21 - T11 * T20) / det
-        d_invT10[d_idx] = (T01 * T22 - T02 * T21) / det
-        d_invT11[d_idx] = (T00 * T22 - T02 * T20) / det
-        d_invT12[d_idx] = (T00 * T21 - T01 * T20) / det
-        d_invT20[d_idx] = (T01 * T12 - T02 * T11) / det
-        d_invT21[d_idx] = (T00 * T12 - T02 * T10) / det
-        d_invT22[d_idx] = (T00 * T11 - T01 * T10) / det
+        d_invT00[d_idx] = invT[3 * 0 + 0]
+        d_invT10[d_idx] = invT[3 * 1 + 0]
+        d_invT20[d_idx] = invT[3 * 2 + 0]
+        d_invT01[d_idx] = invT[3 * 0 + 1]
+        d_invT11[d_idx] = invT[3 * 1 + 1]
+        d_invT21[d_idx] = invT[3 * 2 + 1]
+        d_invT02[d_idx] = invT[3 * 0 + 2]
+        d_invT12[d_idx] = invT[3 * 1 + 2]
+        d_invT22[d_idx] = invT[3 * 2 + 2]
 
         d_gradv00[d_idx] = (d_D00[d_idx] * d_invT00[d_idx] +
                             d_D01[d_idx] * d_invT10[d_idx] +
@@ -570,6 +582,7 @@ class ArtificialViscocity(Equation):
                 d_aw[d_idx] -= s_m[s_idx] * XIJ[2] * Piijby2 * inparentheses
                 d_ae[d_idx] += s_m[s_idx] * vijdotxij * Piijby2 * nbdi * tilwij
 
+
 # Strictly, these wall boundary equations are not a part of cullen dehnen
 # paper. These are from pysph.sph.gas_dynamics.boundary_equations.WallBoundary
 # with modifications just so that this scheme can be used to run tests with
@@ -655,7 +668,7 @@ class WallBoundary2(Equation):
         d_hnurho[d_idx] = 0.0
 
     def loop(self, d_idx, s_idx, d_p, d_rho, d_cs, d_divv, d_wij, d_htmp, s_p,
-             s_rho, s_cs, s_h, s_divv,  WI, s_f, d_f, s_hnurho, d_hnurho,
+             s_rho, s_cs, s_h, s_divv, WI, s_f, d_f, s_hnurho, d_hnurho,
              s_hnu, d_hnu):
         d_wij[d_idx] += WI
         d_p[d_idx] += s_p[s_idx] * WI
