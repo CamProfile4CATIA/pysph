@@ -205,33 +205,32 @@ class VelocityGradient(Equation):
         d_invT12[d_idx] = invT[3 * 1 + 2]
         d_invT22[d_idx] = invT[3 * 2 + 2]
 
-        d_gradv00[d_idx] = (d_D00[d_idx] * d_invT00[d_idx] +
-                            d_D01[d_idx] * d_invT10[d_idx] +
-                            d_D02[d_idx] * d_invT20[d_idx])
-        d_gradv01[d_idx] = (d_D00[d_idx] * d_invT01[d_idx] +
-                            d_D01[d_idx] * d_invT11[d_idx] +
-                            d_D02[d_idx] * d_invT21[d_idx])
-        d_gradv02[d_idx] = (d_D00[d_idx] * d_invT02[d_idx] +
-                            d_D01[d_idx] * d_invT12[d_idx] +
-                            d_D02[d_idx] * d_invT22[d_idx])
-        d_gradv10[d_idx] = (d_D10[d_idx] * d_invT00[d_idx] +
-                            d_D11[d_idx] * d_invT10[d_idx] +
-                            d_D12[d_idx] * d_invT20[d_idx])
-        d_gradv11[d_idx] = (d_D10[d_idx] * d_invT01[d_idx] +
-                            d_D11[d_idx] * d_invT11[d_idx] +
-                            d_D12[d_idx] * d_invT21[d_idx])
-        d_gradv12[d_idx] = (d_D10[d_idx] * d_invT02[d_idx] +
-                            d_D11[d_idx] * d_invT12[d_idx] +
-                            d_D12[d_idx] * d_invT22[d_idx])
-        d_gradv20[d_idx] = (d_D20[d_idx] * d_invT00[d_idx] +
-                            d_D21[d_idx] * d_invT10[d_idx] +
-                            d_D22[d_idx] * d_invT20[d_idx])
-        d_gradv21[d_idx] = (d_D20[d_idx] * d_invT01[d_idx] +
-                            d_D21[d_idx] * d_invT11[d_idx] +
-                            d_D22[d_idx] * d_invT21[d_idx])
-        d_gradv22[d_idx] = (d_D20[d_idx] * d_invT02[d_idx] +
-                            d_D21[d_idx] * d_invT12[d_idx] +
-                            d_D22[d_idx] * d_invT22[d_idx])
+        gradv = declare('matrix(9)')
+        gradvls = declare('matrix(9)')
+
+        gradv[3 * 0 + 0] = d_D00[d_idx]
+        gradv[3 * 0 + 1] = d_D01[d_idx]
+        gradv[3 * 0 + 2] = d_D02[d_idx]
+
+        gradv[3 * 1 + 0] = d_D10[d_idx]
+        gradv[3 * 1 + 1] = d_D11[d_idx]
+        gradv[3 * 1 + 2] = d_D12[d_idx]
+
+        gradv[3 * 2 + 0] = d_D20[d_idx]
+        gradv[3 * 2 + 1] = d_D21[d_idx]
+        gradv[3 * 2 + 2] = d_D22[d_idx]
+
+        mat_mult(gradv, invT, 3, gradvls)
+
+        d_gradv00[d_idx] = gradvls[3 * 0 + 0]
+        d_gradv10[d_idx] = gradvls[3 * 1 + 0]
+        d_gradv20[d_idx] = gradvls[3 * 2 + 0]
+        d_gradv01[d_idx] = gradvls[3 * 0 + 1]
+        d_gradv11[d_idx] = gradvls[3 * 1 + 1]
+        d_gradv21[d_idx] = gradvls[3 * 2 + 1]
+        d_gradv02[d_idx] = gradvls[3 * 0 + 2]
+        d_gradv12[d_idx] = gradvls[3 * 1 + 2]
+        d_gradv22[d_idx] = gradvls[3 * 2 + 2]
 
 
 class VelocityDivergence(Equation):
