@@ -250,6 +250,8 @@ class CullenDehnenScheme(Scheme):
             pa = particle_arrays[fluid]
             self._ensure_properties(pa, props, clean)
             pa.add_property('orig_idx', type='int')
+            pa.add_property('gradv', stride=9)
+            pa.add_property('invtt', stride=9)
             nfp = pa.get_number_of_particles()
             pa.orig_idx[:] = numpy.arange(nfp)
             pa.add_property('Mh', data=pa.m * Nh / Vnu)

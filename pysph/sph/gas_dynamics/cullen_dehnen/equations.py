@@ -100,127 +100,77 @@ class VelocityGradient(Equation):
     def initialize(
             self, d_idx, d_invT00, d_invT01, d_invT02, d_invT10, d_invT11,
             d_invT12, d_invT20, d_invT21, d_invT22, d_D00, d_D01, d_D02, d_D10,
-            d_D11, d_D12, d_D20, d_D21, d_D22):
-        d_D00[d_idx] = 0.0
-        d_D01[d_idx] = 0.0
-        d_D02[d_idx] = 0.0
-
-        d_D10[d_idx] = 0.0
-        d_D11[d_idx] = 0.0
-        d_D12[d_idx] = 0.0
-
-        d_D20[d_idx] = 0.0
-        d_D21[d_idx] = 0.0
-        d_D22[d_idx] = 0.0
-
-        d_invT00[d_idx] = 0.0
-        d_invT01[d_idx] = 0.0
-        d_invT02[d_idx] = 0.0
-
-        d_invT10[d_idx] = 0.0
-        d_invT11[d_idx] = 0.0
-        d_invT12[d_idx] = 0.0
-
-        d_invT20[d_idx] = 0.0
-        d_invT21[d_idx] = 0.0
-        d_invT22[d_idx] = 0.0
+            d_D11, d_D12, d_D20, d_D21, d_D22, d_gradv, d_invtt):
+        start_indx, i, dim = declare('int')
+        start_indx = 9 * d_idx
+        for i in range(9):
+            d_gradv[start_indx + i] = 0.0
+            d_invtt[start_indx + i] = 0.0
 
     def loop(
             self, d_idx, s_idx, s_m, s_rho, VIJ, d_invT00, d_invT01,
             d_invT02, d_invT10, d_invT11, d_invT12, d_invT20, d_invT21,
-            d_invT22, d_D00, d_D01, d_D02, d_D10, d_D11, d_D12, d_D20, d_D21,
-            d_D22, RIJ, XIJ, d_h, WDASHI, d_hnu):
+            d_invT22, RIJ, XIJ, d_h, WDASHI, d_hnu, d_invtt,
+            d_gradv):
         Vb = s_m[s_idx] / s_rho[s_idx]
         qi = RIJ / d_h[d_idx]
+        start_indx, row, col, rowcol, drowcol, dim = declare('int', 6)
+        dim = self.dim
+
         if RIJ > 1e-12:
             qi = RIJ / d_h[d_idx]
             tilwij = WDASHI * d_hnu[d_idx] / qi
             barwij = Vb * tilwij
+            start_indx = d_idx * 9
+            for row in range(dim):
+                for col in range(dim):
+                    rowcol = row * 3 + col
+                    drowcol = start_indx + rowcol
 
-            d_D00[d_idx] -= VIJ[0] * XIJ[0] * barwij
-            d_D01[d_idx] -= VIJ[0] * XIJ[1] * barwij
-            d_D02[d_idx] -= VIJ[0] * XIJ[2] * barwij
-
-            d_D10[d_idx] -= VIJ[1] * XIJ[0] * barwij
-            d_D11[d_idx] -= VIJ[1] * XIJ[1] * barwij
-            d_D12[d_idx] -= VIJ[1] * XIJ[2] * barwij
-
-            d_D20[d_idx] -= VIJ[2] * XIJ[0] * barwij
-            d_D21[d_idx] -= VIJ[2] * XIJ[1] * barwij
-            d_D22[d_idx] -= VIJ[2] * XIJ[2] * barwij
-
-            d_invT00[d_idx] -= XIJ[0] * XIJ[0] * barwij
-            d_invT01[d_idx] -= XIJ[0] * XIJ[1] * barwij
-            d_invT02[d_idx] -= XIJ[0] * XIJ[2] * barwij
-
-            d_invT10[d_idx] -= XIJ[1] * XIJ[0] * barwij
-            d_invT11[d_idx] -= XIJ[1] * XIJ[1] * barwij
-            d_invT12[d_idx] -= XIJ[1] * XIJ[2] * barwij
-
-            d_invT20[d_idx] -= XIJ[2] * XIJ[0] * barwij
-            d_invT21[d_idx] -= XIJ[2] * XIJ[1] * barwij
-            d_invT22[d_idx] -= XIJ[2] * XIJ[2] * barwij
+                    d_gradv[drowcol] -= VIJ[row] * XIJ[col] * barwij
+                    d_invtt[drowcol] -= XIJ[row] * XIJ[col] * barwij
 
     def post_loop(
             self, d_idx, d_invT00, d_invT01, d_invT02, d_invT10, d_invT11,
             d_invT12, d_invT20, d_invT21, d_invT22, d_D00, d_D01, d_D02, d_D10,
             d_D11, d_D12, d_D20, d_D21, d_D22, d_gradv00, d_gradv01,
             d_gradv02, d_gradv10, d_gradv11, d_gradv12, d_gradv20,
-            d_gradv21, d_gradv22):
+            d_gradv21, d_gradv22, d_gradv, d_invtt):
 
-        T = declare('matrix(9)')
-        invT = declare('matrix(9)')
-        augT = declare('matrix(18)')
+        tt = declare('matrix(9)')
+        invtt = declare('matrix(9)')
+        augtt = declare('matrix(18)')
         idmat = declare('matrix(9)')
-
-        T[3 * 0 + 0] = d_invT00[d_idx]
-        T[3 * 0 + 1] = d_invT01[d_idx]
-        T[3 * 0 + 2] = d_invT02[d_idx]
-
-        T[3 * 1 + 0] = d_invT10[d_idx]
-        T[3 * 1 + 1] = d_invT11[d_idx]
-        T[3 * 1 + 2] = d_invT12[d_idx]
-
-        T[3 * 2 + 0] = d_invT20[d_idx]
-        T[3 * 2 + 1] = d_invT21[d_idx]
-        T[3 * 2 + 2] = d_invT22[d_idx]
-
-        if self.dim == 1:
-            T[3 * 1 + 1] = 1.0
-            T[3 * 2 + 2] = 1.0
-        elif self.dim == 2:
-            T[3 * 2 + 2] = 1.0
-
-        identity(idmat, 3)
-        augmented_matrix(T, idmat, 3, 3, 3, augT)
-        gj_solve(augT, 3, 3, invT)
-
-        d_invT00[d_idx] = invT[3 * 0 + 0]
-        d_invT10[d_idx] = invT[3 * 1 + 0]
-        d_invT20[d_idx] = invT[3 * 2 + 0]
-        d_invT01[d_idx] = invT[3 * 0 + 1]
-        d_invT11[d_idx] = invT[3 * 1 + 1]
-        d_invT21[d_idx] = invT[3 * 2 + 1]
-        d_invT02[d_idx] = invT[3 * 0 + 2]
-        d_invT12[d_idx] = invT[3 * 1 + 2]
-        d_invT22[d_idx] = invT[3 * 2 + 2]
-
         gradv = declare('matrix(9)')
+        start_indx, row, col, rowcol, drowcol, dim = declare('int', 6)
+        dim = self.dim
+        start_indx = 9 * d_idx
+        identity(idmat, 3)
+        identity(tt, 3)
+
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * 3 + col
+                drowcol = start_indx + rowcol
+
+                gradv[rowcol] = d_gradv[drowcol]
+                tt[rowcol] = d_invtt[drowcol]
+
+        augmented_matrix(tt, idmat, 3, 3, 3, augtt)
+        gj_solve(augtt, 3, 3, invtt)
+
+        d_invT00[d_idx] = invtt[3 * 0 + 0]
+        d_invT10[d_idx] = invtt[3 * 1 + 0]
+        d_invT20[d_idx] = invtt[3 * 2 + 0]
+        d_invT01[d_idx] = invtt[3 * 0 + 1]
+        d_invT11[d_idx] = invtt[3 * 1 + 1]
+        d_invT21[d_idx] = invtt[3 * 2 + 1]
+        d_invT02[d_idx] = invtt[3 * 0 + 2]
+        d_invT12[d_idx] = invtt[3 * 1 + 2]
+        d_invT22[d_idx] = invtt[3 * 2 + 2]
+
         gradvls = declare('matrix(9)')
-
-        gradv[3 * 0 + 0] = d_D00[d_idx]
-        gradv[3 * 0 + 1] = d_D01[d_idx]
-        gradv[3 * 0 + 2] = d_D02[d_idx]
-
-        gradv[3 * 1 + 0] = d_D10[d_idx]
-        gradv[3 * 1 + 1] = d_D11[d_idx]
-        gradv[3 * 1 + 2] = d_D12[d_idx]
-
-        gradv[3 * 2 + 0] = d_D20[d_idx]
-        gradv[3 * 2 + 1] = d_D21[d_idx]
-        gradv[3 * 2 + 2] = d_D22[d_idx]
-
-        mat_mult(gradv, invT, 3, gradvls)
+        mat_mult(gradv, invtt, 3, gradvls)
 
         d_gradv00[d_idx] = gradvls[3 * 0 + 0]
         d_gradv10[d_idx] = gradvls[3 * 1 + 0]
@@ -326,7 +276,6 @@ class AcclerationGradient(Equation):
         d_grada02[d_idx] = gradals[3 * 0 + 2]
         d_grada12[d_idx] = gradals[3 * 1 + 2]
         d_grada22[d_idx] = gradals[3 * 2 + 2]
-
 
 
 class VelocityDivergenceRate(Equation):
