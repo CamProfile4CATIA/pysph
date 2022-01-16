@@ -287,33 +287,46 @@ class AcclerationGradient(Equation):
                   d_DD01, d_DD02, d_DD10, d_DD11, d_DD12, d_DD20, d_DD21,
                   d_DD22, d_grada00, d_grada01, d_grada02, d_grada10,
                   d_grada11, d_grada12, d_grada20, d_grada21, d_grada22):
-        d_grada00[d_idx] = (d_DD00[d_idx] * d_invT00[d_idx] +
-                            d_DD01[d_idx] * d_invT10[d_idx] +
-                            d_DD02[d_idx] * d_invT20[d_idx])
-        d_grada01[d_idx] = (d_DD00[d_idx] * d_invT01[d_idx] +
-                            d_DD01[d_idx] * d_invT11[d_idx] +
-                            d_DD02[d_idx] * d_invT21[d_idx])
-        d_grada02[d_idx] = (d_DD00[d_idx] * d_invT02[d_idx] +
-                            d_DD01[d_idx] * d_invT12[d_idx] +
-                            d_DD02[d_idx] * d_invT22[d_idx])
-        d_grada10[d_idx] = (d_DD10[d_idx] * d_invT00[d_idx] +
-                            d_DD11[d_idx] * d_invT10[d_idx] +
-                            d_DD12[d_idx] * d_invT20[d_idx])
-        d_grada11[d_idx] = (d_DD10[d_idx] * d_invT01[d_idx] +
-                            d_DD11[d_idx] * d_invT11[d_idx] +
-                            d_DD12[d_idx] * d_invT21[d_idx])
-        d_grada12[d_idx] = (d_DD10[d_idx] * d_invT02[d_idx] +
-                            d_DD11[d_idx] * d_invT12[d_idx] +
-                            d_DD12[d_idx] * d_invT22[d_idx])
-        d_grada20[d_idx] = (d_DD20[d_idx] * d_invT00[d_idx] +
-                            d_DD21[d_idx] * d_invT10[d_idx] +
-                            d_DD22[d_idx] * d_invT20[d_idx])
-        d_grada21[d_idx] = (d_DD20[d_idx] * d_invT01[d_idx] +
-                            d_DD21[d_idx] * d_invT11[d_idx] +
-                            d_DD22[d_idx] * d_invT21[d_idx])
-        d_grada22[d_idx] = (d_DD20[d_idx] * d_invT02[d_idx] +
-                            d_DD21[d_idx] * d_invT12[d_idx] +
-                            d_DD22[d_idx] * d_invT22[d_idx])
+        invT = declare('matrix(9)')
+        grada = declare('matrix(9)')
+        gradals = declare('matrix(9)')
+
+        invT[3 * 0 + 0] = d_invT00[d_idx]
+        invT[3 * 0 + 1] = d_invT01[d_idx]
+        invT[3 * 0 + 2] = d_invT02[d_idx]
+
+        invT[3 * 1 + 0] = d_invT10[d_idx]
+        invT[3 * 1 + 1] = d_invT11[d_idx]
+        invT[3 * 1 + 2] = d_invT12[d_idx]
+
+        invT[3 * 2 + 0] = d_invT20[d_idx]
+        invT[3 * 2 + 1] = d_invT21[d_idx]
+        invT[3 * 2 + 2] = d_invT22[d_idx]
+
+        grada[3 * 0 + 0] = d_grada00[d_idx]
+        grada[3 * 0 + 1] = d_grada01[d_idx]
+        grada[3 * 0 + 2] = d_grada02[d_idx]
+
+        grada[3 * 1 + 0] = d_grada10[d_idx]
+        grada[3 * 1 + 1] = d_grada11[d_idx]
+        grada[3 * 1 + 2] = d_grada12[d_idx]
+
+        grada[3 * 2 + 0] = d_grada20[d_idx]
+        grada[3 * 2 + 1] = d_grada21[d_idx]
+        grada[3 * 2 + 2] = d_grada22[d_idx]
+
+        mat_mult(grada, invT, 3, gradals)
+
+        d_grada00[d_idx] = gradals[3 * 0 + 0]
+        d_grada10[d_idx] = gradals[3 * 1 + 0]
+        d_grada20[d_idx] = gradals[3 * 2 + 0]
+        d_grada01[d_idx] = gradals[3 * 0 + 1]
+        d_grada11[d_idx] = gradals[3 * 1 + 1]
+        d_grada21[d_idx] = gradals[3 * 2 + 1]
+        d_grada02[d_idx] = gradals[3 * 0 + 2]
+        d_grada12[d_idx] = gradals[3 * 1 + 2]
+        d_grada22[d_idx] = gradals[3 * 2 + 2]
+
 
 
 class VelocityDivergenceRate(Equation):
