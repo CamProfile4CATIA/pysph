@@ -126,7 +126,7 @@ class CullenDehnenScheme(Scheme):
                 VelocityGradient(dest=fluid, sources=all_pa, dim=dim)
             )
             sweep1.append(
-                VelocityDivergence(dest=fluid, sources=None)
+                VelocityDivergence(dest=fluid, sources=None, dim=dim)
             )
             sweep1.append(
                 AcclerationGradient(dest=fluid, sources=all_pa,
