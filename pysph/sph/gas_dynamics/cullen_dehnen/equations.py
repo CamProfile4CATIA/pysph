@@ -159,16 +159,6 @@ class VelocityGradient(Equation):
         augmented_matrix(tt, idmat, 3, 3, 3, augtt)
         gj_solve(augtt, 3, 3, invtt)
 
-        d_invT00[d_idx] = invtt[3 * 0 + 0]
-        d_invT10[d_idx] = invtt[3 * 1 + 0]
-        d_invT20[d_idx] = invtt[3 * 2 + 0]
-        d_invT01[d_idx] = invtt[3 * 0 + 1]
-        d_invT11[d_idx] = invtt[3 * 1 + 1]
-        d_invT21[d_idx] = invtt[3 * 2 + 1]
-        d_invT02[d_idx] = invtt[3 * 0 + 2]
-        d_invT12[d_idx] = invtt[3 * 1 + 2]
-        d_invT22[d_idx] = invtt[3 * 2 + 2]
-
         gradvls = declare('matrix(9)')
         mat_mult(gradv, invtt, 3, gradvls)
 
@@ -181,6 +171,14 @@ class VelocityGradient(Equation):
         d_gradv02[d_idx] = gradvls[3 * 0 + 2]
         d_gradv12[d_idx] = gradvls[3 * 1 + 2]
         d_gradv22[d_idx] = gradvls[3 * 2 + 2]
+
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * 3 + col
+                drowcol = start_indx + rowcol
+
+                d_gradv[drowcol] = gradv[rowcol]
+                d_invtt[drowcol] = invtt[rowcol]
 
 
 class VelocityDivergence(Equation):
@@ -236,22 +234,20 @@ class AcclerationGradient(Equation):
                   d_invT11, d_invT12, d_invT20, d_invT21, d_invT22, d_DD00,
                   d_DD01, d_DD02, d_DD10, d_DD11, d_DD12, d_DD20, d_DD21,
                   d_DD22, d_grada00, d_grada01, d_grada02, d_grada10,
-                  d_grada11, d_grada12, d_grada20, d_grada21, d_grada22):
-        invT = declare('matrix(9)')
+                  d_grada11, d_grada12, d_grada20, d_grada21, d_grada22, d_invtt):
+        invtt = declare('matrix(9)')
         grada = declare('matrix(9)')
         gradals = declare('matrix(9)')
 
-        invT[3 * 0 + 0] = d_invT00[d_idx]
-        invT[3 * 0 + 1] = d_invT01[d_idx]
-        invT[3 * 0 + 2] = d_invT02[d_idx]
+        dim, start_indx, row, col, rowcol, drowcol = declare('int',6)
+        dim = self.dim
+        start_indx = d_idx * 9
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * 3 + col
+                drowcol = start_indx + rowcol
+                invtt[rowcol] = d_invtt[drowcol]
 
-        invT[3 * 1 + 0] = d_invT10[d_idx]
-        invT[3 * 1 + 1] = d_invT11[d_idx]
-        invT[3 * 1 + 2] = d_invT12[d_idx]
-
-        invT[3 * 2 + 0] = d_invT20[d_idx]
-        invT[3 * 2 + 1] = d_invT21[d_idx]
-        invT[3 * 2 + 2] = d_invT22[d_idx]
 
         grada[3 * 0 + 0] = d_DD00[d_idx]
         grada[3 * 0 + 1] = d_DD01[d_idx]
@@ -265,7 +261,7 @@ class AcclerationGradient(Equation):
         grada[3 * 2 + 1] = d_DD21[d_idx]
         grada[3 * 2 + 2] = d_DD22[d_idx]
 
-        mat_mult(grada, invT, 3, gradals)
+        mat_mult(grada, invtt, 3, gradals)
 
         d_grada00[d_idx] = gradals[3 * 0 + 0]
         d_grada10[d_idx] = gradals[3 * 1 + 0]
