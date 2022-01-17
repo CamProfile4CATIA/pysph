@@ -1,7 +1,9 @@
-from pysph.sph.equation import Equation
 from math import exp, sqrt
-from pysph.base.particle_array import get_ghost_tag
+
 from compyle.api import declare
+from pysph.base.particle_array import get_ghost_tag
+
+from pysph.sph.equation import Equation
 from pysph.sph.wc.linalg import identity, gj_solve, augmented_matrix, mat_mult
 
 GHOST_TAG = get_ghost_tag()
@@ -171,7 +173,6 @@ class VelocityGradient(Equation):
                 d_invtt[drowcol] = invtt[rowcol]
 
 
-
 class VelocityDivergence(Equation):
     def __init__(self, dest, sources, dim):
         self.dim = dim
@@ -186,8 +187,6 @@ class VelocityDivergence(Equation):
         for row in range(dim):
             drowcol = start_indx + row * 3 + row
             d_divv[d_idx] += d_gradv[drowcol]
-
-
 
 
 class AcclerationGradient(Equation):
@@ -309,7 +308,8 @@ class TracelessSymmetricStrainRate(Equation):
                   d_gradv11, d_gradv12, d_gradv20, d_gradv21, d_gradv22,
                   d_S00, d_S10, d_S11, d_S20, d_S21, d_S22, d_divv,
                   d_gradv, d_ss):
-        dim, start_indx, ltstart_indx, row, col, dij, dji, dltij = declare('int', 8)
+        dim, start_indx, ltstart_indx = declare('int', 4)
+        row, col, dij, dji, dltij = declare('int', 4)
         dim = self.dim
         divvbydim = d_divv[d_idx] / dim
 
@@ -322,7 +322,6 @@ class TracelessSymmetricStrainRate(Equation):
             dltij = ltstart_indx + (row * (row + 1)) / 2 + col
             d_ss[dltij] = d_gradv[dij] - divvbydim
 
-
         for row in range(1, dim):
             for col in range(row):
                 dij = start_indx + row * 3 + col
@@ -331,9 +330,7 @@ class TracelessSymmetricStrainRate(Equation):
                 d_ss[dltij] = 0.5 * (d_gradv[dij] + d_gradv[dji])
 
 
-
 class ShockIndicatorR(Equation):
-
     def initialize(self, d_idx, d_R):
         d_R[d_idx] = 0.0
 
