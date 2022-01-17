@@ -99,46 +99,32 @@ class VelocityGradient(Equation):
     def _get_helpers_(self):
         return [augmented_matrix, gj_solve, identity, mat_mult]
 
-    def initialize(
-            self, d_idx, d_invT00, d_invT01, d_invT02, d_invT10, d_invT11,
-            d_invT12, d_invT20, d_invT21, d_invT22, d_D00, d_D01, d_D02, d_D10,
-            d_D11, d_D12, d_D20, d_D21, d_D22, d_gradv, d_invtt):
-        start_indx, i, dim = declare('int')
+    def initialize(self, d_idx, d_gradv, d_invtt):
+        start_indx, i, dim = declare('int', 3)
         start_indx = 9 * d_idx
         for i in range(9):
             d_gradv[start_indx + i] = 0.0
             d_invtt[start_indx + i] = 0.0
 
-    def loop(
-            self, d_idx, s_idx, s_m, s_rho, VIJ, d_invT00, d_invT01,
-            d_invT02, d_invT10, d_invT11, d_invT12, d_invT20, d_invT21,
-            d_invT22, RIJ, XIJ, d_h, WDASHI, d_hnu, d_invtt,
-            d_gradv):
-        Vb = s_m[s_idx] / s_rho[s_idx]
-        qi = RIJ / d_h[d_idx]
-        start_indx, row, col, rowcol, drowcol, dim = declare('int', 6)
+    def loop(self, d_idx, s_idx, s_m, s_rho, VIJ, RIJ, XIJ, d_h, WDASHI, d_hnu,
+            d_invtt, d_gradv):
+        start_indx, row, col, drowcol, dim = declare('int', 5)
         dim = self.dim
 
         if RIJ > 1e-12:
+            Vb = s_m[s_idx] / s_rho[s_idx]
             qi = RIJ / d_h[d_idx]
             tilwij = WDASHI * d_hnu[d_idx] / qi
             barwij = Vb * tilwij
             start_indx = d_idx * 9
             for row in range(dim):
                 for col in range(dim):
-                    rowcol = row * 3 + col
-                    drowcol = start_indx + rowcol
+                    drowcol = start_indx + row * 3 + col
 
                     d_gradv[drowcol] -= VIJ[row] * XIJ[col] * barwij
                     d_invtt[drowcol] -= XIJ[row] * XIJ[col] * barwij
 
-    def post_loop(
-            self, d_idx, d_invT00, d_invT01, d_invT02, d_invT10, d_invT11,
-            d_invT12, d_invT20, d_invT21, d_invT22, d_D00, d_D01, d_D02, d_D10,
-            d_D11, d_D12, d_D20, d_D21, d_D22, d_gradv00, d_gradv01,
-            d_gradv02, d_gradv10, d_gradv11, d_gradv12, d_gradv20,
-            d_gradv21, d_gradv22, d_gradv, d_invtt):
-
+    def post_loop(self, d_idx, d_gradv, d_invtt):
         tt = declare('matrix(9)')
         invtt = declare('matrix(9)')
         augtt = declare('matrix(18)')
