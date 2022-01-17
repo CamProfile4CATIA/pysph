@@ -164,8 +164,7 @@ class VelocityDivergence(Equation):
         self.dim = dim
         super().__init__(dest, sources)
 
-    def post_loop(self, d_idx, d_divv, d_gradv00, d_gradv11, d_gradv22,
-                  d_gradv):
+    def post_loop(self, d_idx, d_divv, d_gradv):
         start_indx, row, drowcol, dim = declare('int', 4)
         dim = self.dim
         start_indx = d_idx * 9
@@ -180,51 +179,39 @@ class AcclerationGradient(Equation):
         self.dim = dim
         super().__init__(dest, sources)
 
-    def initialize(self, d_idx, d_DD00, d_DD01, d_DD02, d_DD10,
-                   d_DD11, d_DD12, d_DD20, d_DD21, d_DD22):
-        d_DD00[d_idx] = 0.0
-        d_DD01[d_idx] = 0.0
-        d_DD02[d_idx] = 0.0
+    def _get_helpers_(self):
+        return [mat_mult]
 
-        d_DD10[d_idx] = 0.0
-        d_DD11[d_idx] = 0.0
-        d_DD12[d_idx] = 0.0
+    def initialize(self, d_idx, d_grada):
+        start_indx, i, dim = declare('int', 3)
+        start_indx = 9 * d_idx
+        for i in range(9):
+            d_grada[start_indx + i] = 0.0
 
-        d_DD20[d_idx] = 0.0
-        d_DD21[d_idx] = 0.0
-        d_DD22[d_idx] = 0.0
+    def loop(self, d_idx, s_idx, s_m, s_rho, RIJ, XIJ, d_h,
+             d_au, s_au, d_av, s_av, d_aw, s_aw, WDASHI, d_hnu, d_grada):
 
-    def loop(self, d_idx, s_idx, s_m, s_rho, d_DD00, d_DD01, d_DD02, d_DD10,
-             d_DD11, d_DD12, d_DD20, d_DD21, d_DD22, RIJ, XIJ, d_h,
-             d_au, s_au, d_av, s_av, d_aw, s_aw, WDASHI, d_hnu):
-        Vb = s_m[s_idx] / s_rho[s_idx]
+        aij = declare('matrix(3)')
+        start_indx, row, col, dim, drowcol = declare('int', 5)
+        dim = self.dim
+        start_indx = 9 * d_idx
 
         if RIJ > 1e-12:
+            Vb = s_m[s_idx] / s_rho[s_idx]
             qi = RIJ / d_h[d_idx]
             tilwij = WDASHI * d_hnu[d_idx] / qi
             barwij = Vb * tilwij
 
-            auij = d_au[d_idx] - s_au[s_idx]
-            d_DD00[d_idx] -= auij * XIJ[0] * barwij
-            d_DD01[d_idx] -= auij * XIJ[1] * barwij
-            d_DD02[d_idx] -= auij * XIJ[2] * barwij
+            aij[0] = d_au[d_idx] - s_au[s_idx]
+            aij[1] = d_av[d_idx] - s_av[s_idx]
+            aij[2] = d_aw[d_idx] - s_aw[s_idx]
 
-            avij = d_av[d_idx] - s_av[s_idx]
-            d_DD10[d_idx] -= avij * XIJ[0] * barwij
-            d_DD11[d_idx] -= avij * XIJ[1] * barwij
-            d_DD12[d_idx] -= avij * XIJ[2] * barwij
+            for row in range(dim):
+                for col in range(dim):
+                    drowcol = start_indx + row * 3 + col
+                    d_grada[drowcol] -= aij[row] * XIJ[col] * barwij
 
-            awij = d_aw[d_idx] - s_aw[s_idx]
-            d_DD20[d_idx] -= awij * XIJ[0] * barwij
-            d_DD21[d_idx] -= awij * XIJ[1] * barwij
-            d_DD22[d_idx] -= awij * XIJ[2] * barwij
-
-    def post_loop(self, d_idx, d_invT00, d_invT01, d_invT02, d_invT10,
-                  d_invT11, d_invT12, d_invT20, d_invT21, d_invT22, d_DD00,
-                  d_DD01, d_DD02, d_DD10, d_DD11, d_DD12, d_DD20, d_DD21,
-                  d_DD22, d_grada00, d_grada01, d_grada02, d_grada10,
-                  d_grada11, d_grada12, d_grada20, d_grada21, d_grada22,
-                  d_invtt):
+    def post_loop(self, d_idx, d_invtt, d_grada):
         invtt = declare('matrix(9)')
         grada = declare('matrix(9)')
         gradals = declare('matrix(9)')
@@ -237,30 +224,15 @@ class AcclerationGradient(Equation):
                 rowcol = row * 3 + col
                 drowcol = start_indx + rowcol
                 invtt[rowcol] = d_invtt[drowcol]
-
-        grada[3 * 0 + 0] = d_DD00[d_idx]
-        grada[3 * 0 + 1] = d_DD01[d_idx]
-        grada[3 * 0 + 2] = d_DD02[d_idx]
-
-        grada[3 * 1 + 0] = d_DD10[d_idx]
-        grada[3 * 1 + 1] = d_DD11[d_idx]
-        grada[3 * 1 + 2] = d_DD12[d_idx]
-
-        grada[3 * 2 + 0] = d_DD20[d_idx]
-        grada[3 * 2 + 1] = d_DD21[d_idx]
-        grada[3 * 2 + 2] = d_DD22[d_idx]
+                grada[rowcol] = d_grada[drowcol]
 
         mat_mult(grada, invtt, 3, gradals)
 
-        d_grada00[d_idx] = gradals[3 * 0 + 0]
-        d_grada10[d_idx] = gradals[3 * 1 + 0]
-        d_grada20[d_idx] = gradals[3 * 2 + 0]
-        d_grada01[d_idx] = gradals[3 * 0 + 1]
-        d_grada11[d_idx] = gradals[3 * 1 + 1]
-        d_grada21[d_idx] = gradals[3 * 2 + 1]
-        d_grada02[d_idx] = gradals[3 * 0 + 2]
-        d_grada12[d_idx] = gradals[3 * 1 + 2]
-        d_grada22[d_idx] = gradals[3 * 2 + 2]
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * 3 + col
+                drowcol = start_indx + rowcol
+                d_grada[drowcol] = gradals[rowcol]
 
 
 class VelocityDivergenceRate(Equation):
@@ -268,16 +240,15 @@ class VelocityDivergenceRate(Equation):
         self.dim = dim
         super().__init__(dest, sources)
 
-    def post_loop(self, d_idx, d_adivv, d_grada00, d_grada11, d_grada22,
-                  d_gradv00, d_gradv11, d_gradv22, d_gradv01, d_gradv10,
-                  d_gradv02, d_gradv20, d_gradv21, d_gradv12, d_gradv):
-        d_adivv[d_idx] = (d_grada00[d_idx] +
-                          d_grada11[d_idx] +
-                          d_grada22[d_idx])
-
+    def post_loop(self, d_idx, d_adivv, d_gradv, d_grada):
         dim, start_indx, row, col, trans_drowcol, drowcol = declare('int', 6)
+        d_adivv[d_idx] = 0.0
         dim = self.dim
         start_indx = d_idx * 9
+        for row in range(dim):
+            drowcol = start_indx + row * 3 + row
+            d_adivv[d_idx] += d_grada[drowcol]
+
         for row in range(dim):
             for col in range(dim):
                 drowcol = start_indx + row * 3 + col
@@ -290,12 +261,9 @@ class TracelessSymmetricStrainRate(Equation):
         self.dim = dim
         super().__init__(dest, sources)
 
-    def post_loop(self, d_idx, d_gradv00, d_gradv01, d_gradv02, d_gradv10,
-                  d_gradv11, d_gradv12, d_gradv20, d_gradv21, d_gradv22,
-                  d_S00, d_S10, d_S11, d_S20, d_S21, d_S22, d_divv,
-                  d_gradv, d_ss):
-        dim, start_indx, ltstart_indx = declare('int', 4)
-        row, col, dij, dji, dltij = declare('int', 4)
+    def post_loop(self, d_idx, d_divv, d_gradv, d_ss):
+        dim, start_indx, ltstart_indx, row = declare('int', 4)
+        col, dij, dji, dltij = declare('int', 4)
         dim = self.dim
         divvbydim = d_divv[d_idx] / dim
 
@@ -350,9 +318,8 @@ class SignalVelocity(Equation):
     def initialize(self, d_idx, d_vsig):
         d_vsig[d_idx] = 0.0
 
-    def loop_all(
-            self, d_idx, d_x, d_y, d_z, s_x, s_y, s_z, d_u, d_v, d_w, s_u, s_v,
-            s_w, d_cs, s_cs, d_vsig, NBRS, N_NBRS):
+    def loop_all(self, d_idx, d_x, d_y, d_z, s_x, s_y, s_z, d_u, d_v, d_w, s_u,
+                 s_v, s_w, d_cs, s_cs, d_vsig, NBRS, N_NBRS):
         i = declare('int')
         s_idx = declare('long')
         xij = declare('matrix(3)')
@@ -381,10 +348,8 @@ class FalseDetectionSuppressingLimiterXi(Equation):
         self.dim = dim
         super().__init__(dest, sources)
 
-    def post_loop(self, d_idx, d_divv, d_R, d_S00, d_S11, d_S22, d_S10, d_S20,
-                  d_S21, d_xi, d_ss):
-
-        ltstart_indx, row, col, dltij, dim = declare('int', 8)
+    def post_loop(self, d_idx, d_divv, d_R, d_xi, d_ss):
+        ltstart_indx, row, col, dltij, dim = declare('int', 5)
         dim = self.dim
         ltstart_indx = d_idx * 6
         omR = 1 - d_R[d_idx]
@@ -422,7 +387,7 @@ class IndividualViscosityLocal(Equation):
         hsq = d_h[d_idx] * d_h[d_idx]
 
         # To avoid nan when den = 0
-        if d_A[d_idx] > 1e-20:
+        if d_A[d_idx] > 1e-12:
             num = hsq * d_A[d_idx]
             den = num + d_vsig[d_idx] * d_vsig[d_idx]
             d_alphaloc[d_idx] = alphamax * num / den
@@ -436,7 +401,7 @@ class ViscosityDecayTimeScale(Equation):
         self.fkern = fkern
         super().__init__(dest, sources)
 
-    def post_loop(self, d_idx, d_cs, d_h, d_tau, SPH_KERNEL):
+    def post_loop(self, d_idx, d_cs, d_h, d_tau):
         l = self.l
         fkern = self.fkern
         d_tau[d_idx] = d_h[d_idx] * fkern / (l * d_cs[d_idx])
@@ -459,7 +424,7 @@ class UpdateGhostProps(Equation):
         self.dim = dim
         assert GHOST_TAG == 2
 
-    def initialize(self, d_idx, d_orig_idx, d_p, d_cs, d_tag, d_f, d_h,
+    def initialize(self, d_idx, d_orig_idx, d_p, d_tag, d_f, d_h,
                    d_hnurho, d_rho, d_hnu):
         idx = declare('int')
         if d_tag[d_idx] == 2:
@@ -512,9 +477,9 @@ class ArtificialViscocity(Equation):
         self.b = b
         super().__init__(dest, sources)
 
-    def loop(self, d_idx, s_idx, d_rho, d_alpha, s_rho, s_alpha, d_au, d_av,
+    def loop(self, d_idx, s_idx, d_alpha, s_alpha, d_au, d_av,
              d_aw, VIJ, d_ae, XIJ, d_h, RIJ, R2IJ, s_h, d_f,
-             s_f, d_hnurho, s_hnurho, d_m, d_cs, s_cs, s_m, EPS, WDASHI,
+             s_f, d_hnurho, s_hnurho, d_cs, s_cs, s_m, EPS, WDASHI,
              d_hnu, WDASHJ, s_hnu):
         b = self.b
 
