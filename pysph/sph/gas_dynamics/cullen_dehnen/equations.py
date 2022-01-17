@@ -296,23 +296,34 @@ class VelocityDivergenceRate(Equation):
 
 class TracelessSymmetricStrainRate(Equation):
     def __init__(self, dest, sources, dim):
-        self.obydim = 1.0 / dim
+        self.dim = dim
         super().__init__(dest, sources)
 
     def post_loop(self, d_idx, d_gradv00, d_gradv01, d_gradv02, d_gradv10,
                   d_gradv11, d_gradv12, d_gradv20, d_gradv21, d_gradv22,
                   d_S00, d_S10, d_S11, d_S20, d_S21, d_S22, d_divv,
-                  d_gradv):
-        obydim = self.obydim
+                  d_gradv, d_ss):
+        dim, start_indx, ltstart_indx, row, col, dij, dji, dltij = declare('int', 8)
+        dim = self.dim
+        divvbydim = d_divv[d_idx] / dim
 
-        d_S00[d_idx] = d_gradv[d_idx*9] - obydim * d_divv[d_idx]
+        start_indx = d_idx * 9
+        ltstart_indx = d_idx * 6
+        for row in range(dim):
+            col = row
+            dij = start_indx + row * 3 + col
+            dji = start_indx + row + col * 3
+            dltij = ltstart_indx + (row * (row + 1)) / 2 + col
+            d_ss[dltij] = d_gradv[dij] - divvbydim
 
-        d_S10[d_idx] = 0.5 * (d_gradv[d_idx*9+1] + d_gradv[d_idx*9+3*1])
-        d_S11[d_idx] = d_gradv[d_idx*9+3*1+1] - obydim * d_divv[d_idx]
 
-        d_S20[d_idx] = 0.5 * (d_gradv[d_idx*9+2] + d_gradv[d_idx*9+3*2])
-        d_S21[d_idx] = 0.5 * (d_gradv[d_idx*9+3*2+1] + d_gradv[d_idx*9+3*1+2])
-        d_S22[d_idx] = d_gradv22[d_idx*9+3*2+2] - obydim * d_divv[d_idx]
+        for row in range(1, dim):
+            for col in range(row):
+                dij = start_indx + row * 3 + col
+                dji = start_indx + row + col * 3
+                dltij = ltstart_indx + (row * (row + 1)) / 2 + col
+                d_ss[dltij] = 0.5 * (d_gradv[dij] + d_gradv[dji])
+
 
 
 class ShockIndicatorR(Equation):
@@ -377,19 +388,28 @@ class SignalVelocity(Equation):
 
 
 class FalseDetectionSuppressingLimiterXi(Equation):
+    def __init__(self, dest, sources, dim):
+        self.dim = dim
+        super().__init__(dest, sources)
 
     def post_loop(self, d_idx, d_divv, d_R, d_S00, d_S11, d_S22, d_S10, d_S20,
-                  d_S21, d_xi):
+                  d_S21, d_xi, d_ss):
+
+        ltstart_indx, row, col, dltij, dim = declare('int', 8)
+        dim = self.dim
+        ltstart_indx = d_idx * 6
         omR = 1 - d_R[d_idx]
 
         num = 2 * omR * omR * omR * omR * d_divv[d_idx]
         num *= num
 
         # trace(S \cdot S^t)
-        trSdotSt = (d_S00[d_idx] ** 2 + d_S10[d_idx] ** 2 + d_S20[d_idx] ** 2 +
-                    d_S10[d_idx] ** 2 + d_S11[d_idx] ** 2 + d_S21[d_idx] ** 2 +
-                    d_S20[d_idx] ** 2 + d_S21[d_idx] ** 2 + d_S22[d_idx] ** 2)
+        trSdotSt = 0.0
 
+        for row in range(dim):
+            for col in range(dim):
+                dltij = ltstart_indx + (row * (row + 1)) / 2 + col
+                trSdotSt += d_ss[dltij] * d_ss[dltij]
         den = num + trSdotSt
 
         if den == 0:
