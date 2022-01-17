@@ -212,17 +212,10 @@ class CullenDehnenScheme(Scheme):
         props = ['tag', 'pid', 'gid', 'ah', 'x', 'u', 'z', 'h0', 'e', 'aw',
                  'p', 'v', 'w', 'y', 'ae', 'cs', 'm', 'au', 'rho', 'h', 'av']
 
-        add_props = ['hnurho', 'f', 'ftil', 'et', 'ut', 'vt', 'wt', 'D21',
-                     'gradv20', 'invT10', 'invT00', 'invT20', 'invT11',
-                     'invT02', 'D01', 'gradv01', 'gradv10', 'D10', 'D02',
-                     'gradv21', 'invT22', 'gradv02', 'D00', 'invT21', 'invT01',
-                     'D22', 'D12', 'D11', 'invT12', 'gradv12', 'D20',
-                     'gradv11', 'gradv00', 'gradv22', 'divv', 'grada21',
-                     'grada11', 'grada00', 'grada02', 'grada12', 'DD11',
-                     'DD21', 'DD02', 'DD22', 'grada01', 'DD10', 'DD00', 'DD12',
-                     'grada10', 'DD20', 'DD01', 'grada20', 'grada22', 'adivv',
-                     'S10', 'S22', 'S11', 'S00', 'S20', 'S21', 'R', 'vsig',
-                     'xi', 'A', 'alphaloc', 'tau', 'alpha', 'ahden', 'hnu']
+        add_props = ['hnurho', 'f', 'ftil', 'et', 'ut', 'vt', 'wt',
+                     'divv', 'adivv', 'R', 'vsig', 'xi', 'A',
+                     'alphaloc', 'tau', 'alpha', 'ahden', 'hnu']
+
         props.extend(add_props)
 
         # For Mh.
@@ -253,6 +246,7 @@ class CullenDehnenScheme(Scheme):
             pa.add_property('gradv', stride=9)
             pa.add_property('invtt', stride=9)
             pa.add_property('ss', stride=6)
+            pa.add_property('grada', stride=9)
             nfp = pa.get_number_of_particles()
             pa.orig_idx[:] = numpy.arange(nfp)
             pa.add_property('Mh', data=pa.m * Nh / Vnu)
