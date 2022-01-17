@@ -162,16 +162,6 @@ class VelocityGradient(Equation):
         gradvls = declare('matrix(9)')
         mat_mult(gradv, invtt, 3, gradvls)
 
-        d_gradv00[d_idx] = gradvls[3 * 0 + 0]
-        d_gradv10[d_idx] = gradvls[3 * 1 + 0]
-        d_gradv20[d_idx] = gradvls[3 * 2 + 0]
-        d_gradv01[d_idx] = gradvls[3 * 0 + 1]
-        d_gradv11[d_idx] = gradvls[3 * 1 + 1]
-        d_gradv21[d_idx] = gradvls[3 * 2 + 1]
-        d_gradv02[d_idx] = gradvls[3 * 0 + 2]
-        d_gradv12[d_idx] = gradvls[3 * 1 + 2]
-        d_gradv22[d_idx] = gradvls[3 * 2 + 2]
-
         for row in range(dim):
             for col in range(dim):
                 rowcol = row * 3 + col
@@ -180,8 +170,21 @@ class VelocityGradient(Equation):
 
 
 class VelocityDivergence(Equation):
-    def post_loop(self, d_idx, d_divv, d_gradv00, d_gradv11, d_gradv22):
-        d_divv[d_idx] = d_gradv00[d_idx] + d_gradv11[d_idx] + d_gradv22[d_idx]
+    def __init__(self, dest, sources, dim):
+        self.dim = dim
+        super().__init__(dest, sources)
+
+    def post_loop(self, d_idx, d_divv, d_gradv00, d_gradv11, d_gradv22,
+                  d_gradv):
+        start_indx, row, drowcol, dim = declare('int', 4)
+        dim = self.dim
+        start_indx = d_idx * 9
+        d_divv[d_idx] = 0.0
+        for row in range(dim):
+            drowcol = start_indx + row * 3 + row
+            d_divv[d_idx] += d_gradv[drowcol]
+
+
 
 
 class AcclerationGradient(Equation):
