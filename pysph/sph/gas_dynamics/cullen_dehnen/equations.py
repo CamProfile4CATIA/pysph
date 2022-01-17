@@ -177,8 +177,9 @@ class VelocityGradient(Equation):
                 rowcol = row * 3 + col
                 drowcol = start_indx + rowcol
 
-                d_gradv[drowcol] = gradv[rowcol]
+                d_gradv[drowcol] = gradvls[rowcol]
                 d_invtt[drowcol] = invtt[rowcol]
+
 
 
 class VelocityDivergence(Equation):
@@ -234,12 +235,13 @@ class AcclerationGradient(Equation):
                   d_invT11, d_invT12, d_invT20, d_invT21, d_invT22, d_DD00,
                   d_DD01, d_DD02, d_DD10, d_DD11, d_DD12, d_DD20, d_DD21,
                   d_DD22, d_grada00, d_grada01, d_grada02, d_grada10,
-                  d_grada11, d_grada12, d_grada20, d_grada21, d_grada22, d_invtt):
+                  d_grada11, d_grada12, d_grada20, d_grada21, d_grada22,
+                  d_invtt):
         invtt = declare('matrix(9)')
         grada = declare('matrix(9)')
         gradals = declare('matrix(9)')
 
-        dim, start_indx, row, col, rowcol, drowcol = declare('int',6)
+        dim, start_indx, row, col, rowcol, drowcol = declare('int', 6)
         dim = self.dim
         start_indx = d_idx * 9
         for row in range(dim):
@@ -247,7 +249,6 @@ class AcclerationGradient(Equation):
                 rowcol = row * 3 + col
                 drowcol = start_indx + rowcol
                 invtt[rowcol] = d_invtt[drowcol]
-
 
         grada[3 * 0 + 0] = d_DD00[d_idx]
         grada[3 * 0 + 1] = d_DD01[d_idx]
@@ -275,18 +276,25 @@ class AcclerationGradient(Equation):
 
 
 class VelocityDivergenceRate(Equation):
+    def __init__(self, dest, sources, dim):
+        self.dim = dim
+        super().__init__(dest, sources)
+
     def post_loop(self, d_idx, d_adivv, d_grada00, d_grada11, d_grada22,
                   d_gradv00, d_gradv11, d_gradv22, d_gradv01, d_gradv10,
-                  d_gradv02, d_gradv20, d_gradv21, d_gradv12):
+                  d_gradv02, d_gradv20, d_gradv21, d_gradv12, d_gradv):
         d_adivv[d_idx] = (d_grada00[d_idx] +
                           d_grada11[d_idx] +
-                          d_grada22[d_idx] -
-                          d_gradv00[d_idx] * d_gradv00[d_idx] -
-                          d_gradv11[d_idx] * d_gradv11[d_idx] -
-                          d_gradv22[d_idx] * d_gradv22[d_idx] -
-                          2.0 * (d_gradv01[d_idx] * d_gradv10[d_idx] +
-                                 d_gradv02[d_idx] * d_gradv20[d_idx] +
-                                 d_gradv21[d_idx] * d_gradv12[d_idx]))
+                          d_grada22[d_idx])
+
+        dim, start_indx, row, col, trans_drowcol, drowcol = declare('int', 6)
+        dim = self.dim
+        start_indx = d_idx * 9
+        for row in range(dim):
+            for col in range(dim):
+                drowcol = start_indx + row * 3 + col
+                trans_drowcol = start_indx + row + col * 3
+                d_adivv[d_idx] -= d_gradv[drowcol] * d_gradv[trans_drowcol]
 
 
 class TracelessSymmetricStrainRate(Equation):
@@ -296,17 +304,18 @@ class TracelessSymmetricStrainRate(Equation):
 
     def post_loop(self, d_idx, d_gradv00, d_gradv01, d_gradv02, d_gradv10,
                   d_gradv11, d_gradv12, d_gradv20, d_gradv21, d_gradv22,
-                  d_S00, d_S10, d_S11, d_S20, d_S21, d_S22, d_divv):
+                  d_S00, d_S10, d_S11, d_S20, d_S21, d_S22, d_divv,
+                  d_gradv):
         obydim = self.obydim
 
-        d_S00[d_idx] = d_gradv00[d_idx] - obydim * d_divv[d_idx]
+        d_S00[d_idx] = d_gradv[d_idx*9] - obydim * d_divv[d_idx]
 
-        d_S10[d_idx] = 0.5 * (d_gradv01[d_idx] + d_gradv10[d_idx])
-        d_S11[d_idx] = d_gradv11[d_idx] - obydim * d_divv[d_idx]
+        d_S10[d_idx] = 0.5 * (d_gradv[d_idx*9+1] + d_gradv[d_idx*9+3*1])
+        d_S11[d_idx] = d_gradv[d_idx*9+3*1+1] - obydim * d_divv[d_idx]
 
-        d_S20[d_idx] = 0.5 * (d_gradv02[d_idx] + d_gradv20[d_idx])
-        d_S21[d_idx] = 0.5 * (d_gradv21[d_idx] + d_gradv12[d_idx])
-        d_S22[d_idx] = d_gradv22[d_idx] - obydim * d_divv[d_idx]
+        d_S20[d_idx] = 0.5 * (d_gradv[d_idx*9+2] + d_gradv[d_idx*9+3*2])
+        d_S21[d_idx] = 0.5 * (d_gradv[d_idx*9+3*2+1] + d_gradv[d_idx*9+3*1+2])
+        d_S22[d_idx] = d_gradv22[d_idx*9+3*2+2] - obydim * d_divv[d_idx]
 
 
 class ShockIndicatorR(Equation):
