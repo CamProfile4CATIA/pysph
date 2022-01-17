@@ -133,7 +133,7 @@ class CullenDehnenScheme(Scheme):
                                     dim=dim)
             )
             sweep1.append(
-                VelocityDivergenceRate(dest=fluid, sources=None)
+                VelocityDivergenceRate(dest=fluid, sources=None, dim=dim)
             )
             sweep1.append(
                 TracelessSymmetricStrainRate(dest=fluid, sources=None,
