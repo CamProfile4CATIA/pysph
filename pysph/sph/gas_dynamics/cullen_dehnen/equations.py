@@ -140,9 +140,14 @@ class VelocityGradient(Equation):
             for col in range(dim):
                 rowcol = row * 3 + col
                 drowcol = start_indx + rowcol
-
-                gradv[rowcol] = d_gradv[drowcol]
                 tt[rowcol] = d_invtt[drowcol]
+
+        for row in range(3):
+            for col in range(3):
+                rowcol = row * 3 + col
+                drowcol = start_indx + rowcol
+                gradv[rowcol] = d_gradv[drowcol]
+
 
         augmented_matrix(tt, idmat, 3, 3, 3, augtt)
         gj_solve(augtt, 3, 3, invtt)
@@ -219,8 +224,8 @@ class AcclerationGradient(Equation):
         dim, start_indx, row, col, rowcol, drowcol = declare('int', 6)
         dim = self.dim
         start_indx = d_idx * 9
-        for row in range(dim):
-            for col in range(dim):
+        for row in range(3):
+            for col in range(3):
                 rowcol = row * 3 + col
                 drowcol = start_indx + rowcol
                 invtt[rowcol] = d_invtt[drowcol]

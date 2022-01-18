@@ -107,12 +107,12 @@ class SodShockTube(ShockTubeSetup):
         )
         cullendehnen = CullenDehnenScheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            l=0.05, alphamax=2.0, b=0.5, has_ghosts=True
+            l=0.1, alphamax=2.0, b=1.0, has_ghosts=True
         )
         tsph = TSPHScheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            kernel_factor=None, alpha1=1.0, alpha2=0.1,
-            beta=2.0, update_alpha1=True, update_alpha2=False,
+            kernel_factor=None, alpha1=1.0, av_switch='morris',
+            beta=2.0, update_alpha2=False, alphaav=1.0
         )
         s = SchemeChooser(
             default='adke', adke=adke, mpm=mpm, gsph=gsph, crk=crk,
