@@ -140,18 +140,8 @@ class SummationDensity(Equation):
 
 
 class TSPHAccelerations(Equation):
-    def __init__(self, dest, sources, dim, fkern, beta=2.0,
-                 update_alpha1=False,
-                 update_alpha2=False, alpha1_min=0.1, alpha2_min=0.1,
-                 sigma=0.1):
+    def __init__(self, dest, sources, dim, fkern, beta=2.0):
         self.beta = beta
-        self.sigma = sigma
-
-        self.update_alpha1 = update_alpha1
-        self.update_alpha2 = update_alpha2
-
-        self.alpha1_min = alpha1_min
-        self.alpha2_min = alpha2_min
         self.dim = dim
         self.fkern = fkern
 
@@ -177,6 +167,8 @@ class TSPHAccelerations(Equation):
              EPS, RIJ, R2IJ, RHOIJ, d_dt_cfl, d_h, d_dndh, d_n,
              d_drhosumdh, s_h, s_dndh, s_n, s_drhosumdh, s_u, s_v, s_w, d_u,
              d_v, d_w):
+
+        dim = self.dim
 
         # particle pressure
         p_i = d_p[d_idx]
@@ -214,7 +206,7 @@ class TSPHAccelerations(Equation):
         d_dt_cfl[d_idx] = max(d_dt_cfl[d_idx], cij + self.beta * dot)
 
         # Artificial viscosity
-        if dot <= 0.0:
+        if vijdotxij <= 0.0:
             # viscosity
             alpha1 = 0.5 * (d_alpha1[d_idx] + s_alpha1[s_idx])
             muij = hij * vijdotxij / (R2IJ + 0.0001 * hij ** 2)
@@ -232,36 +224,43 @@ class TSPHAccelerations(Equation):
                     VIJ[0] * aaui + VIJ[1] * aavi + VIJ[2] * aawi)
 
         # grad-h correction terms.
-        hibynidim = d_h[d_idx] / (d_n[d_idx] * self.dim)
+        hibynidim = d_h[d_idx] / (d_n[d_idx] * dim)
         inbrkti = 1 + d_dndh[d_idx] * d_h[d_idx] * hibynidim
         inprthsi = d_drhosumdh[d_idx] * hibynidim
         fij = 1 - inprthsi / (s_m[s_idx] * inbrkti)
 
-        hjbynjdim = s_h[s_idx] / (s_n[s_idx] * self.dim)
+        hjbynjdim = s_h[s_idx] / (s_n[s_idx] * dim)
         inbrktj = 1 + s_dndh[s_idx] * s_h[s_idx] * hjbynjdim
         inprthsj = s_drhosumdh[s_idx] * hibynidim
         fji = 1 - inprthsj / (d_m[d_idx] * inbrktj)
 
         # accelerations for velocity
-        mmj_pibrhoi_fij = -mj * pibrhoi2 * fij
-        mmj_pjbrhoj_fji = -mj * pjbrhoj2 * fji
+        mj_pibrhoi_fij = mj * pibrhoi2 * fij
+        mj_pjbrhoj_fji = mj * pjbrhoj2 * fji
 
-        d_au[d_idx] += mmj_pibrhoi_fij * DWI[0] + mmj_pjbrhoj_fji * DWJ[0]
-        d_av[d_idx] += mmj_pibrhoi_fij * DWI[1] + mmj_pjbrhoj_fji * DWJ[1]
-        d_aw[d_idx] += mmj_pibrhoi_fij * DWI[2] + mmj_pjbrhoj_fji * DWJ[2]
+        d_au[d_idx] -= mj_pibrhoi_fij * DWI[0] + mj_pjbrhoj_fji * DWJ[0]
+        d_av[d_idx] -= mj_pibrhoi_fij * DWI[1] + mj_pjbrhoj_fji * DWJ[1]
+        d_aw[d_idx] -= mj_pibrhoi_fij * DWI[2] + mj_pjbrhoj_fji * DWJ[2]
 
         # accelerations for the thermal energy
         vijdotdwi = VIJ[0] * DWI[0] + VIJ[1] * DWI[1] + VIJ[2] * DWI[2]
         d_ae[d_idx] += mj * pibrhoi2 * fij * vijdotdwi
 
-    def post_loop(self, d_idx, d_h, d_cs, d_alpha1, d_aalpha1, d_divv):
 
+class MorrisSwitch(Equation):
+    def __init__(self, dest, sources, alpha1_min=0.1, sigma=0.1):
+        self.sigma = sigma
+        self.alpha1_min = alpha1_min
+        super().__init__(dest, sources)
+
+    def post_loop(self, d_h, d_idx, d_cs, d_divv, d_aalpha1, d_alpha1):
         hi = d_h[d_idx]
         tau = hi / (self.sigma * d_cs[d_idx])
 
-        if self.update_alpha1:
-            S1 = max(-d_divv[d_idx], 0.0)
-            d_aalpha1[d_idx] = (self.alpha1_min - d_alpha1[d_idx]) / tau + S1
+        S1 = max(-d_divv[d_idx], 0.0)
+        d_aalpha1[d_idx] = (self.alpha1_min - d_alpha1[d_idx]) / tau + S1
+
+
 
 
 class VelocityGradDivC1(Equation):

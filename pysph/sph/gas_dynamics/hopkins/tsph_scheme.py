@@ -2,13 +2,12 @@ from pysph.sph.scheme import Scheme, add_bool_argument
 from math import isclose
 
 
-
 class TSPHScheme(Scheme):
     def __init__(self, fluids, solids, dim, gamma, kernel_factor, alpha1=1.0,
-                 alpha2=0.0, beta=2.0, update_alpha1=True,
-                 update_alpha2=False, fkern=1.0,
+                 alpha2=0.0, beta=2.0, update_alpha2=False, fkern=1.0,
                  max_density_iterations=250, alphaav=1.0,
-                 density_iteration_tolerance=1e-3, has_ghosts=False):
+                 density_iteration_tolerance=1e-3, has_ghosts=False,
+                 av_switch='balsara'):
 
         self.fluids = fluids
         self.solids = solids
@@ -17,7 +16,6 @@ class TSPHScheme(Scheme):
         self.gamma = gamma
         self.alpha1 = alpha1
         self.alpha2 = alpha2
-        self.update_alpha1 = update_alpha1
         self.update_alpha2 = update_alpha2
         self.beta = beta
         self.kernel_factor = kernel_factor
@@ -26,9 +24,17 @@ class TSPHScheme(Scheme):
         self.has_ghosts = has_ghosts
         self.fkern = fkern
         self.alphaav = alphaav
+        self.av_switch = av_switch
 
     def add_user_options(self, group):
 
+        av_switch_choices = ['morris', 'balsara']
+        group.add_argument(
+            "--av-switch", action="store", dest="av_switch",
+            default=None, choices=av_switch_choices,
+            help="Specify switch to "
+                 "adapt artificial viscocity %s" % av_switch_choices
+        )
         group.add_argument(
             "--alpha1", action="store", type=float, dest="alpha1",
             default=None,
@@ -50,18 +56,13 @@ class TSPHScheme(Scheme):
             help="Gamma for the state equation."
         )
         add_bool_argument(
-            group, "update-alpha1", dest="update_alpha1",
-            help="Update the alpha1 parameter.",
-            default=None
-        )
-        add_bool_argument(
             group, "update-alpha2", dest="update_alpha2",
             help="Update the alpha2 parameter.",
             default=None
         )
 
     def consume_user_options(self, options):
-        vars = ['gamma', 'alpha2', 'alpha1', 'beta', 'update_alpha1',
+        vars = ['gamma', 'alpha2', 'alpha1', 'beta', 'av_switch',
                 'update_alpha2']
         data = dict((var, self._smart_getattr(options, var))
                     for var in vars)
@@ -74,10 +75,10 @@ class TSPHScheme(Scheme):
         if kernel is None:
             kernel = Gaussian(dim=self.dim)
 
-        if hasattr(kernel,'fkern'):
-            self.fkern=kernel.fkern
+        if hasattr(kernel, 'fkern'):
+            self.fkern = kernel.fkern
         else:
-            self.fkern= 1.0
+            self.fkern = 1.0
 
         steppers = {}
         if extra_steppers is not None:
@@ -105,14 +106,12 @@ class TSPHScheme(Scheme):
             IdealGasEOS, MPMUpdateGhostProps
         )
         from .equations import SummationDensity, TSPHAccelerations, \
-            VelocityGradDivC1
+            VelocityGradDivC1, MorrisSwitch
         from pysph.sph.gas_dynamics.boundary_equations import WallBoundary
 
         if not isclose(self.alpha2, 0.0, abs_tol=1e-10) or self.update_alpha2:
-            print(self.alpha2)
             print("Ideally, TSPH is not supposed to have artificial"
                   " conductivity")
-
 
         equations = []
         # Find the optimal 'h'
@@ -140,8 +139,8 @@ class TSPHScheme(Scheme):
         g5 = []
         for fluid in self.fluids:
             g5.append(VelocityGradDivC1(dest=fluid,
-                                       sources=self.fluids + self.solids,
-                                       dim=self.dim))
+                                        sources=self.fluids + self.solids,
+                                        dim=self.dim))
 
         equations.append(Group(equations=g5))
 
@@ -163,14 +162,17 @@ class TSPHScheme(Scheme):
             g4.append(TSPHAccelerations(
                 dest=fluid, sources=self.fluids + self.solids,
                 dim=self.dim,
-                alpha1_min=self.alpha1,
-                alpha2_min=self.alpha2, beta=self.beta,
-                update_alpha1=self.update_alpha1,
-                update_alpha2=self.update_alpha2,
+                beta=self.beta,
                 fkern=self.fkern
             ))
+            if self.av_switch == 'morris':
+                g4.append(MorrisSwitch(
+                    dest=fluid,
+                    sources=None,
+                    alpha1_min=0.1,
+                    sigma=0.1
+                ))
         equations.append(Group(equations=g4))
-
 
         return equations
 
