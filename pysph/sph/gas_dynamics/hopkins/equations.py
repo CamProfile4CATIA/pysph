@@ -140,7 +140,8 @@ class SummationDensity(Equation):
 
 
 class TSPHAccelerations(Equation):
-    def __init__(self, dest, sources, dim, fkern, beta=2.0, update_alpha1=False,
+    def __init__(self, dest, sources, dim, fkern, beta=2.0,
+                 update_alpha1=False,
                  update_alpha2=False, alpha1_min=0.1, alpha2_min=0.1,
                  sigma=0.1):
         self.beta = beta
@@ -263,7 +264,7 @@ class TSPHAccelerations(Equation):
             d_aalpha1[d_idx] = (self.alpha1_min - d_alpha1[d_idx]) / tau + S1
 
 
-class VelocityGradient(Equation):
+class VelocityGradDivC1(Equation):
     def __init__(self, dest, sources, dim):
         self.dim = dim
         super().__init__(dest, sources)
@@ -271,67 +272,57 @@ class VelocityGradient(Equation):
     def _get_helpers_(self):
         return [augmented_matrix, gj_solve, identity, mat_mult]
 
-    def initialize(self, d_gradv, d_idx, d_invcapr):
-        rowcol, dim, indx, indx_rowcol, dimsq = declare('int', 5)
-        dim = self.dim
-        dimsq = dim * dim
-        indx = 9 * d_idx
-        for rowcol in range(dimsq):
-            indx_rowcol = indx + rowcol
-            d_gradv[indx_rowcol] = 0.0
-            d_invcapr[indx_rowcol] = 0.0
+    def initialize(self, d_gradv, d_idx, d_invtt, d_divv):
+        start_indx, i, dim = declare('int', 3)
+        start_indx = 9 * d_idx
+        for i in range(9):
+            d_gradv[start_indx + i] = 0.0
+            d_invtt[start_indx + i] = 0.0
+        d_divv[d_idx] = 0.0
 
-    def loop(self, d_idx, d_invcapr, s_m, s_idx, VIJ, DWI, XIJ, d_gradv):
-        row, col, dim, indx_rowcol, indx = declare('int', 5)
+    def loop(self, d_idx, d_invtt, s_m, s_idx, VIJ, DWI, XIJ, d_gradv):
+        start_indx, row, col, drowcol, dim = declare('int', 5)
         dim = self.dim
-        indx = d_idx * 9
+        start_indx = d_idx * 9
         for row in range(dim):
             for col in range(dim):
-                indx_rowcol = indx + dim * row + col
-                d_invcapr[indx_rowcol] -= s_m[s_idx] * XIJ[row] * DWI[col]
-                d_gradv[indx_rowcol] -= s_m[s_idx] * VIJ[row] * DWI[col]
+                drowcol = start_indx + row * 3 + col
+                d_invtt[drowcol] -= s_m[s_idx] * XIJ[row] * DWI[col]
+                d_gradv[drowcol] -= s_m[s_idx] * VIJ[row] * DWI[col]
 
-    def post_loop(self, d_idx, d_invcapr, s_m, s_idx, VIJ, DWI, XIJ, d_gradv):
-        row, col, dim, rowcol, indx, indx_rowcol = declare('int', 7)
-        dim = self.dim
-        gradv = declare('matrix(9)')
-        gradvls = declare('matrix(9)')
-        capr = declare('matrix(9)')
-        invcapr = declare('matrix(9)')
-        indx = d_idx * 9
-
-        identity(capr, 3)
-        for row in range(dim):
-            for col in range(dim):
-                rowcol = 3 * row + col
-                indx_rowcol = indx + rowcol
-                gradv[rowcol] = d_gradv[indx_rowcol]
-                capr[rowcol] = d_invcapr[indx_rowcol]
-
+    def post_loop(self, d_idx, d_gradv, d_invtt, d_divv):
+        tt = declare('matrix(9)')
+        invtt = declare('matrix(9)')
+        augtt = declare('matrix(18)')
         idmat = declare('matrix(9)')
+        gradv = declare('matrix(9)')
+        start_indx, row, col, rowcol, drowcol, dim = declare('int', 6)
+        dim = self.dim
+        start_indx = 9 * d_idx
         identity(idmat, 3)
-        auga = declare('matrix(18)')
-        augmented_matrix(A=capr, b=idmat, n=3, na=3, nmax=3, result=auga)
-        gj_solve(m=auga, n=3, nb=3, result=invcapr)
-        mat_mult(a=gradv, b=invcapr, n=3, result=gradvls)
+        identity(tt, 3)
+
+        for row in range(3):
+            for col in range(3):
+                rowcol = row * 3 + col
+                drowcol = start_indx + rowcol
+                gradv[rowcol] = d_gradv[drowcol]
+
         for row in range(dim):
             for col in range(dim):
-                rowcol = 3 * row + col
-                indx_rowcol = indx + rowcol
-                d_gradv[indx_rowcol] = gradvls[rowcol]
-                d_invcapr[indx_rowcol] = invcapr[rowcol]
+                rowcol = row * 3 + col
+                drowcol = start_indx + rowcol
+                tt[rowcol] = d_invtt[drowcol]
 
+        augmented_matrix(tt, idmat, 3, 3, 3, augtt)
+        gj_solve(augtt, 3, 3, invtt)
+        gradvls = declare('matrix(9)')
+        mat_mult(gradv, invtt, 3, gradvls)
 
-class VelocityDivergence(Equation):
-    def __init__(self, dest, sources, dim):
-        self.dim = dim
-        super().__init__(dest, sources)
+        for row in range(dim):
+            d_divv[d_idx] += gradvls[row * 3 + row]
+            for col in range(dim):
+                rowcol = row * 3 + col
+                drowcol = start_indx + rowcol
+                d_gradv[drowcol] = gradvls[rowcol]
 
-    def post_loop(self, d_idx, d_divv, d_gradv):
-        dim, i, indx_rowcol = declare('int', 3)
-        dim = self.dim
-        divv = 0.0
-        for i in range(dim):
-            indx_rowcol = d_idx * 9 + 3 * i + i
-            divv += d_gradv[indx_rowcol]
-        d_divv[d_idx] = divv

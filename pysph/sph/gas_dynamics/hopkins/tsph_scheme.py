@@ -1,13 +1,11 @@
 from pysph.sph.scheme import Scheme, add_bool_argument
-from compyle.api import declare
-from pysph.sph.wc.linalg import (
-    augmented_matrix, dot, gj_solve, identity, mat_vec_mult
-)
+from math import isclose
+
 
 
 class TSPHScheme(Scheme):
     def __init__(self, fluids, solids, dim, gamma, kernel_factor, alpha1=1.0,
-                 alpha2=0.1, beta=2.0, update_alpha1=False,
+                 alpha2=0.0, beta=2.0, update_alpha1=True,
                  update_alpha2=False, fkern=1.0,
                  max_density_iterations=250, alphaav=1.0,
                  density_iteration_tolerance=1e-3, has_ghosts=False):
@@ -107,8 +105,13 @@ class TSPHScheme(Scheme):
             IdealGasEOS, MPMUpdateGhostProps
         )
         from .equations import SummationDensity, TSPHAccelerations, \
-            VelocityGradient, VelocityDivergence
+            VelocityGradDivC1
         from pysph.sph.gas_dynamics.boundary_equations import WallBoundary
+
+        if not isclose(self.alpha2, 0.0, abs_tol=1e-10) or self.update_alpha2:
+            print(self.alpha2)
+            print("Ideally, TSPH is not supposed to have artificial"
+                  " conductivity")
 
 
         equations = []
@@ -134,6 +137,13 @@ class TSPHScheme(Scheme):
             g2.append(IdealGasEOS(dest=fluid, sources=None, gamma=self.gamma))
 
         equations.append(Group(equations=g2))
+        g5 = []
+        for fluid in self.fluids:
+            g5.append(VelocityGradDivC1(dest=fluid,
+                                       sources=self.fluids + self.solids,
+                                       dim=self.dim))
+
+        equations.append(Group(equations=g5))
 
         g3 = []
         for solid in self.solids:
@@ -161,15 +171,6 @@ class TSPHScheme(Scheme):
             ))
         equations.append(Group(equations=g4))
 
-        g5 = []
-        for fluid in self.fluids:
-            g5.append(VelocityGradient(dest=fluid,
-                                       sources=self.fluids + self.solids,
-                                       dim=self.dim))
-            g5.append(VelocityDivergence(dest=fluid,
-                                       sources=self.fluids + self.solids,
-                                       dim=self.dim))
-        equations.append(Group(equations=g5))
 
         return equations
 
@@ -190,9 +191,7 @@ class TSPHScheme(Scheme):
             # Guess for number density.
             pa.add_property('n', data=pa.rho / pa.m)
             pa.add_property('gradv', stride=9)
-            pa.add_property('invcapr', stride=9)
-            pa.add_property('ss', stride=6)
-            pa.add_property('grada', stride=9)
+            pa.add_property('invtt', stride=9)
             nfp = pa.get_number_of_particles()
             pa.orig_idx[:] = numpy.arange(nfp)
             pa.set_output_arrays(output_props)
