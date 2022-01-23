@@ -111,7 +111,7 @@ class SodShockTube(ShockTubeSetup):
         )
         tsph = TSPHScheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            kernel_factor=None, alpha1=1.0, av_switch='morris',
+            kernel_factor=None, alpha1=1.0, av_switch='morris-monaghan',
             beta=2.0, update_alpha2=False, alphaav=1.0
         )
         s = SchemeChooser(

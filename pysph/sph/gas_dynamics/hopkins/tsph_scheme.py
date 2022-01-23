@@ -28,7 +28,7 @@ class TSPHScheme(Scheme):
 
     def add_user_options(self, group):
 
-        av_switch_choices = ['morris', 'balsara']
+        av_switch_choices = ['morris-monaghan', 'balsara']
         group.add_argument(
             "--av-switch", action="store", dest="av_switch",
             default=None, choices=av_switch_choices,
@@ -106,7 +106,7 @@ class TSPHScheme(Scheme):
             IdealGasEOS, MPMUpdateGhostProps
         )
         from .equations import SummationDensity, TSPHAccelerations, \
-            VelocityGradDivC1
+            VelocityGradDivC1, MorrisMonaghanSwitch
         from pysph.sph.gas_dynamics.boundary_equations import WallBoundary
 
         if not isclose(self.alpha2, 0.0, abs_tol=1e-10) or self.update_alpha2:
@@ -141,7 +141,13 @@ class TSPHScheme(Scheme):
             g5.append(VelocityGradDivC1(dest=fluid,
                                         sources=self.fluids + self.solids,
                                         dim=self.dim))
-
+            if self.av_switch == 'morris-monaghan':
+                g5.append(MorrisMonaghanSwitch(
+                    dest=fluid,
+                    sources=None,
+                    alpha1_min=self.alpha1,
+                    sigma=0.1
+                ))
         equations.append(Group(equations=g5))
 
         g3 = []
@@ -162,13 +168,13 @@ class TSPHScheme(Scheme):
             g4.append(TSPHAccelerations(
                 dest=fluid, sources=self.fluids + self.solids,
                 dim=self.dim,
-                alpha1_min=self.alpha1,
-                alpha2_min=self.alpha2, beta=self.beta,
-                update_alpha1=True,
-                update_alpha2=self.update_alpha2,
+                beta=self.beta,
                 fkern=self.fkern
             ))
+
         equations.append(Group(equations=g4))
+
+
 
         return equations
 

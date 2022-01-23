@@ -140,18 +140,8 @@ class SummationDensity(Equation):
 
 
 class TSPHAccelerations(Equation):
-    def __init__(self, dest, sources, dim, fkern, beta=2.0,
-                 update_alpha1=False,
-                 update_alpha2=False, alpha1_min=0.1, alpha2_min=0.1,
-                 sigma=0.1):
+    def __init__(self, dest, sources, dim, fkern, beta=2.0):
         self.beta = beta
-        self.sigma = sigma
-
-        self.update_alpha1 = update_alpha1
-        self.update_alpha2 = update_alpha2
-
-        self.alpha1_min = alpha1_min
-        self.alpha2_min = alpha2_min
         self.dim = dim
         self.fkern = fkern
 
@@ -163,9 +153,6 @@ class TSPHAccelerations(Equation):
         d_av[d_idx] = 0.0
         d_aw[d_idx] = 0.0
         d_ae[d_idx] = 0.0
-
-        d_aalpha1[d_idx] = 0.0
-        d_aalpha2[d_idx] = 0.0
 
         d_del2e[d_idx] = 0.0
         d_dt_cfl[d_idx] = 0.0
@@ -245,25 +232,30 @@ class TSPHAccelerations(Equation):
         fji = 1 - inprthsj / (d_m[d_idx] * inbrktj)
 
         # accelerations for velocity
-        mj_pibrhoi_fij = -mj * pibrhoi2 * fij
-        mj_pjbrhoj_fji = -mj * pjbrhoj2 * fji
+        mj_pibrhoi_fij = mj * pibrhoi2 * fij
+        mj_pjbrhoj_fji = mj * pjbrhoj2 * fji
 
-        d_au[d_idx] += mj_pibrhoi_fij * DWI[0] + mj_pjbrhoj_fji * DWJ[0]
-        d_av[d_idx] += mj_pibrhoi_fij * DWI[1] + mj_pjbrhoj_fji * DWJ[1]
-        d_aw[d_idx] += mj_pibrhoi_fij * DWI[2] + mj_pjbrhoj_fji * DWJ[2]
+        d_au[d_idx] -= mj_pibrhoi_fij * DWI[0] + mj_pjbrhoj_fji * DWJ[0]
+        d_av[d_idx] -= mj_pibrhoi_fij * DWI[1] + mj_pjbrhoj_fji * DWJ[1]
+        d_aw[d_idx] -= mj_pibrhoi_fij * DWI[2] + mj_pjbrhoj_fji * DWJ[2]
 
         # accelerations for the thermal energy
         vijdotdwi = VIJ[0] * DWI[0] + VIJ[1] * DWI[1] + VIJ[2] * DWI[2]
         d_ae[d_idx] += mj * pibrhoi2 * fij * vijdotdwi
 
-    def post_loop(self, d_idx, d_h, d_cs, d_alpha1, d_aalpha1, d_divv):
 
+class MorrisMonaghanSwitch(Equation):
+    def __init__(self, dest, sources, alpha1_min=0.1, sigma=0.1):
+        self.sigma = sigma
+        self.alpha1_min = alpha1_min
+        super().__init__(dest, sources)
+
+    def post_loop(self, d_h, d_idx, d_cs, d_divv, d_aalpha1, d_alpha1):
         hi = d_h[d_idx]
         tau = hi / (self.sigma * d_cs[d_idx])
 
-        if self.update_alpha1:
-            S1 = max(-d_divv[d_idx], 0.0)
-            d_aalpha1[d_idx] = (self.alpha1_min - d_alpha1[d_idx]) / tau + S1
+        S1 = max(-d_divv[d_idx], 0.0)
+        d_aalpha1[d_idx] = (self.alpha1_min - d_alpha1[d_idx]) / tau + S1
 
 
 class VelocityGradDivC1(Equation):
@@ -327,4 +319,3 @@ class VelocityGradDivC1(Equation):
                 rowcol = row * 3 + col
                 drowcol = start_indx + rowcol
                 d_gradv[drowcol] = gradvls[rowcol]
-
