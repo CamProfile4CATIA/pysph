@@ -1,5 +1,4 @@
 from pysph.sph.scheme import Scheme, add_bool_argument
-from math import isclose
 
 
 class TSPHScheme(Scheme):
@@ -105,13 +104,9 @@ class TSPHScheme(Scheme):
         from pysph.sph.gas_dynamics.basic import (
             IdealGasEOS, MPMUpdateGhostProps
         )
-        from .equations import SummationDensity, TSPHAccelerations, \
-            VelocityGradDivC1, MorrisMonaghanSwitch
+        from .equations import SummationDensity, TSPHMomentumAndEnergy, \
+            VelocityGradDivC1, MorrisMonaghanSwitch, BalsaraSwitch
         from pysph.sph.gas_dynamics.boundary_equations import WallBoundary
-
-        if not isclose(self.alpha2, 0.0, abs_tol=1e-10) or self.update_alpha2:
-            print("Ideally, TSPH is not supposed to have artificial"
-                  " conductivity")
 
         equations = []
         # Find the optimal 'h'
@@ -141,7 +136,14 @@ class TSPHScheme(Scheme):
             g5.append(VelocityGradDivC1(dest=fluid,
                                         sources=self.fluids + self.solids,
                                         dim=self.dim))
-            if self.av_switch == 'morris-monaghan':
+            if self.av_switch == 'balsara':
+                g5.append(BalsaraSwitch(
+                    dest=fluid,
+                    sources=None,
+                    alphaav=self.alphaav,
+                    fkern=self.fkern
+                ))
+            elif self.av_switch == 'morris-monaghan':
                 g5.append(MorrisMonaghanSwitch(
                     dest=fluid,
                     sources=None,
@@ -165,7 +167,7 @@ class TSPHScheme(Scheme):
 
         g4 = []
         for fluid in self.fluids:
-            g4.append(TSPHAccelerations(
+            g4.append(TSPHMomentumAndEnergy(
                 dest=fluid, sources=self.fluids + self.solids,
                 dim=self.dim,
                 beta=self.beta,
@@ -173,8 +175,6 @@ class TSPHScheme(Scheme):
             ))
 
         equations.append(Group(equations=g4))
-
-
 
         return equations
 

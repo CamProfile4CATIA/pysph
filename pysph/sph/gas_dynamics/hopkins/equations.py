@@ -24,9 +24,8 @@ class SummationDensity(Equation):
 
         super().__init__(dest, sources)
 
-    def initialize(self, d_idx, d_rho, d_grhox, d_grhoy, d_grhoz,
-                   d_arho, d_drhosumdh, d_n, d_dndh, d_prevn, d_prevdndh,
-                   d_prevdrhosumdh):
+    def initialize(self, d_idx, d_rho, d_arho, d_drhosumdh, d_n, d_dndh,
+                   d_prevn, d_prevdndh, d_prevdrhosumdh):
 
         d_rho[d_idx] = 0.0
         d_arho[d_idx] = 0.0
@@ -44,9 +43,8 @@ class SummationDensity(Equation):
         # to False. The Group can therefore iterate till convergence.
         self.equation_has_converged = 1
 
-    def loop(self, d_idx, s_idx, d_rho, d_grhox, d_grhoy, d_grhoz, d_arho,
-             d_drhosumdh, s_m, d_converged, VIJ, WI, DWI, GHI, d_n,
-             d_dndh, d_h, t, d_prevn, d_prevdndh, d_prevdrhosumdh):
+    def loop(self, d_idx, s_idx, d_rho, d_arho, d_drhosumdh, s_m, VIJ, WI, DWI,
+             GHI, d_n, d_dndh, d_h, d_prevn, d_prevdndh, d_prevdrhosumdh):
 
         mj = s_m[s_idx]
         vijdotdwij = VIJ[0] * DWI[0] + VIJ[1] * DWI[1] + VIJ[2] * DWI[2]
@@ -59,7 +57,6 @@ class SummationDensity(Equation):
         inbrkti = 1 + d_prevdndh[d_idx] * d_h[d_idx] * hibynidim
         inprthsi = d_prevdrhosumdh[d_idx] * hibynidim
         fij = 1 - inprthsi / (s_m[s_idx] * inbrkti)
-
         d_arho[d_idx] += mj * vijdotdwij * fij
 
         # gradient of kernel w.r.t h
@@ -67,8 +64,8 @@ class SummationDensity(Equation):
         d_n[d_idx] += WI
         d_dndh[d_idx] += GHI
 
-    def post_loop(self, d_idx, d_arho, d_rho, d_div, d_omega, d_drhosumdh,
-                  d_h0, d_h, d_m, d_ah, d_converged, d_dndh, s_m):
+    def post_loop(self, d_idx, d_arho, d_rho, d_drhosumdh, d_h0, d_h, d_m,
+                  d_ah, d_converged):
 
         # iteratively find smoothing length consistent with the
         if self.density_iterations:
@@ -85,11 +82,11 @@ class SummationDensity(Equation):
                 rhoi = mi / (hi / self.k) ** self.dim
 
                 # using fi from density entropy formulation for convergence
-                # related checks. TODO: remove these checks if not required.
+                # related checks.
                 dhdrhoi = -hi / (self.dim * d_rho[d_idx])
                 obyfi = 1.0 - dhdrhoi * d_drhosumdh[d_idx]
 
-                # correct fi
+                # correct fi TODO: Remove if not required
                 if obyfi < 0:
                     obyfi = 1.0
 
@@ -105,13 +102,13 @@ class SummationDensity(Equation):
                 # Newton Raphson estimate for the new h
                 hnew = hi - func / dfdh
 
-                # Nanny control for h
+                # Nanny control for h TODO: Remove if not required
                 if (hnew > 1.2 * hi):
                     hnew = 1.2 * hi
                 elif (hnew < 0.8 * hi):
                     hnew = 0.8 * hi
 
-                # overwrite if gone awry
+                # overwrite if gone awry TODO: Remove if not required
                 if ((hnew <= 1e-6) or (fi < 1e-6)):
                     hnew = self.k * (mi / d_rho[d_idx]) ** (1. / self.dim)
 
@@ -139,16 +136,14 @@ class SummationDensity(Equation):
         return self.equation_has_converged
 
 
-class TSPHAccelerations(Equation):
+class TSPHMomentumAndEnergy(Equation):
     def __init__(self, dest, sources, dim, fkern, beta=2.0):
         self.beta = beta
         self.dim = dim
         self.fkern = fkern
-
         super().__init__(dest, sources)
 
-    def initialize(self, d_idx, d_au, d_av, d_aw, d_ae, d_am,
-                   d_aalpha1, d_aalpha2, d_del2e, d_dt_cfl):
+    def initialize(self, d_idx, d_au, d_av, d_aw, d_ae, d_del2e, d_dt_cfl):
         d_au[d_idx] = 0.0
         d_av[d_idx] = 0.0
         d_aw[d_idx] = 0.0
@@ -157,13 +152,10 @@ class TSPHAccelerations(Equation):
         d_del2e[d_idx] = 0.0
         d_dt_cfl[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, d_m, s_m, d_p, s_p, d_cs, s_cs,
-             d_e, s_e, d_rho, s_rho, d_au, d_av, d_aw, d_ae,
-             d_omega, s_omega, XIJ, VIJ, DWI, DWJ, DWIJ, HIJ,
-             d_del2e, d_alpha1, s_alpha1, d_alpha2, s_alpha2,
-             EPS, RIJ, R2IJ, RHOIJ, d_dt_cfl, d_h, d_dndh, d_n,
-             d_drhosumdh, s_h, s_dndh, s_n, s_drhosumdh, s_u, s_v, s_w, d_u,
-             d_v, d_w):
+    def loop(self, d_idx, s_idx, d_m, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
+             d_au, d_av, d_aw, d_ae, XIJ, VIJ, DWI, DWJ, HIJ, d_alpha1,
+             s_alpha1, RIJ, R2IJ, RHOIJ, d_dt_cfl, d_h, d_dndh, d_n,
+             d_drhosumdh, s_h, s_dndh, s_n, s_drhosumdh):
 
         dim = self.dim
 
@@ -196,11 +188,12 @@ class TSPHAccelerations(Equation):
             XIJ[1] /= RIJ
             XIJ[2] /= RIJ
 
-        # v_{ij} \cdot r_{ij} or vijdotxij
-        dot = VIJ[0] * XIJ[0] + VIJ[1] * XIJ[1] + VIJ[2] * XIJ[2]
-
-        # compute the Courant-limited time step factor. TODO: Figure this out.
-        d_dt_cfl[d_idx] = max(d_dt_cfl[d_idx], cij + self.beta * dot)
+        # Is this really reqd?
+        # # v_{ij} \cdot r_{ij} or vijdotxij
+        # dot = VIJ[0] * XIJ[0] + VIJ[1] * XIJ[1] + VIJ[2] * XIJ[2]
+        #
+        # # compute the Courant-limited time step factor.
+        # d_dt_cfl[d_idx] = max(d_dt_cfl[d_idx], cij + self.beta * dot)
 
         # Artificial viscosity
         if vijdotxij <= 0.0:
@@ -256,6 +249,44 @@ class MorrisMonaghanSwitch(Equation):
 
         S1 = max(-d_divv[d_idx], 0.0)
         d_aalpha1[d_idx] = (self.alpha1_min - d_alpha1[d_idx]) / tau + S1
+
+
+class BalsaraSwitch(Equation):
+    def __init__(self, dest, sources, alphaav, fkern):
+        self.alphaav = alphaav
+        self.fkern = fkern
+        super().__init__(dest, sources)
+
+    def post_loop(self, d_h, d_idx, d_cs, d_divv, d_gradv, d_alpha1, dt,
+                  d_aalpha1, d_alpha10, d_arho, d_rho):
+        curlv = declare('matrix(3)')
+
+        curlv[0] = (d_gradv[9 * d_idx + 3 * 2 + 1] -
+                                d_gradv[9 * d_idx + 3 * 1 + 2])
+        curlv[1] = (d_gradv[9 * d_idx + 3 * 0 + 2] -
+                                d_gradv[9 * d_idx + 3 * 2 + 0])
+        curlv[2] = (d_gradv[9 * d_idx + 3 * 1 + 0] -
+                                d_gradv[9 * d_idx + 3 * 0 + 1])
+
+        abscurlv = sqrt(curlv[0] * curlv[0] +
+                        curlv[1] * curlv[1] +
+                        curlv[2] * curlv[2])
+
+        absdivv = abs(d_divv[d_idx])
+
+        fhi = d_h[d_idx] * self.fkern
+
+        d_alpha1[d_idx] = self.alphaav * absdivv / (
+                absdivv + abscurlv + 0.0001 * d_cs[d_idx] / 1e-3)
+
+        # Just to keep stage 2 of PEC happy
+        # ---------------------------------
+        # stage 2 of GasDFluidStep does,
+        # d_alpha1[d_idx] = d_alpha10[d_idx] + dt*d_aalpha1[d_idx]
+        # d_aalpha1 is already 0. d_alpha10[d_idx] is also 0 as the
+        # integrator's initialise is before compute_accelerations.
+        # So, d_alpha1[d_idx] is always rewritten to zero. To avoid this,
+        d_alpha10[d_idx] = d_alpha1[d_idx]
 
 
 class VelocityGradDivC1(Equation):
