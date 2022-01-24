@@ -1,6 +1,7 @@
-from pysph.sph.equation import Equation
-from pysph.base.particle_array import get_ghost_tag
 from compyle.api import declare
+from pysph.base.particle_array import get_ghost_tag
+
+from pysph.sph.equation import Equation
 from pysph.sph.wc.linalg import identity, gj_solve, augmented_matrix, mat_mult
 
 GHOST_TAG = get_ghost_tag()
@@ -143,13 +144,12 @@ class TSPHMomentumAndEnergy(Equation):
         self.fkern = fkern
         super().__init__(dest, sources)
 
-    def initialize(self, d_idx, d_au, d_av, d_aw, d_ae, d_del2e, d_dt_cfl):
+    def initialize(self, d_idx, d_au, d_av, d_aw, d_ae, d_dt_cfl):
         d_au[d_idx] = 0.0
         d_av[d_idx] = 0.0
         d_aw[d_idx] = 0.0
         d_ae[d_idx] = 0.0
 
-        d_del2e[d_idx] = 0.0
         d_dt_cfl[d_idx] = 0.0
 
     def loop(self, d_idx, s_idx, d_m, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
@@ -262,11 +262,11 @@ class BalsaraSwitch(Equation):
         curlv = declare('matrix(3)')
 
         curlv[0] = (d_gradv[9 * d_idx + 3 * 2 + 1] -
-                                d_gradv[9 * d_idx + 3 * 1 + 2])
+                    d_gradv[9 * d_idx + 3 * 1 + 2])
         curlv[1] = (d_gradv[9 * d_idx + 3 * 0 + 2] -
-                                d_gradv[9 * d_idx + 3 * 2 + 0])
+                    d_gradv[9 * d_idx + 3 * 2 + 0])
         curlv[2] = (d_gradv[9 * d_idx + 3 * 1 + 0] -
-                                d_gradv[9 * d_idx + 3 * 0 + 1])
+                    d_gradv[9 * d_idx + 3 * 0 + 1])
 
         abscurlv = sqrt(curlv[0] * curlv[0] +
                         curlv[1] * curlv[1] +

@@ -63,8 +63,7 @@ class TSPHScheme(Scheme):
     def consume_user_options(self, options):
         vars = ['gamma', 'alpha2', 'alpha1', 'beta', 'av_switch',
                 'update_alpha2']
-        data = dict((var, self._smart_getattr(options, var))
-                    for var in vars)
+        data = dict((var, self._smart_getattr(options, var)) for var in vars)
         self.configure(**data)
 
     def configure_solver(self, kernel=None, integrator_cls=None,
@@ -84,10 +83,10 @@ class TSPHScheme(Scheme):
             steppers.update(extra_steppers)
 
         from pysph.sph.integrator import PECIntegrator
-        from pysph.sph.integrator_step import GasDFluidStep
+        from pysph.sph.gas_dynamics.hopkins.integrator_step import PECStep
 
         cls = integrator_cls if integrator_cls is not None else PECIntegrator
-        step_cls = GasDFluidStep
+        step_cls = PECStep
         for name in self.fluids:
             if name not in steppers:
                 steppers[name] = step_cls()
@@ -95,17 +94,15 @@ class TSPHScheme(Scheme):
         integrator = cls(**steppers)
 
         from pysph.solver.solver import Solver
-        self.solver = Solver(
-            dim=self.dim, integrator=integrator, kernel=kernel, **kw
-        )
+        self.solver = Solver(dim=self.dim, integrator=integrator,
+                             kernel=kernel, **kw)
 
     def get_equations(self):
         from pysph.sph.equation import Group
-        from pysph.sph.gas_dynamics.basic import (
-            IdealGasEOS, MPMUpdateGhostProps
-        )
-        from .equations import SummationDensity, TSPHMomentumAndEnergy, \
-            VelocityGradDivC1, MorrisMonaghanSwitch, BalsaraSwitch
+        from pysph.sph.gas_dynamics.basic import (IdealGasEOS,
+                                                  MPMUpdateGhostProps)
+        from .equations import (SummationDensity, TSPHMomentumAndEnergy,
+            VelocityGradDivC1, MorrisMonaghanSwitch, BalsaraSwitch)
         from pysph.sph.gas_dynamics.boundary_equations import WallBoundary
 
         equations = []
@@ -179,15 +176,17 @@ class TSPHScheme(Scheme):
         return equations
 
     def setup_properties(self, particles, clean=True):
-        from pysph.base.utils import get_particle_array_gasd
         import numpy
         particle_arrays = dict([(p.name, p) for p in particles])
-        dummy = get_particle_array_gasd(name='junk')
-        props = list(dummy.properties.keys())
+
+        props = ['rho', 'm', 'x', 'y', 'z', 'u', 'v', 'w', 'h', 'cs', 'p', 'e',
+                 'au', 'av', 'aw', 'ae', 'pid', 'gid', 'tag', 'dwdh', 'alpha1',
+                 'aalpha1', 'alpha10', 'h0', 'converged', 'ah', 'arho',
+                 'dt_cfl', 'e0', 'rho0', 'u0', 'v0', 'w0', 'x0', 'y0', 'z0']
         more_props = ['drhosumdh', 'n', 'dndh', 'prevn', 'prevdndh',
                       'prevdrhosumdh', 'divv']
         props.extend(more_props)
-        output_props = dummy.output_property_arrays
+        output_props = []
         for fluid in self.fluids:
             pa = particle_arrays[fluid]
             self._ensure_properties(pa, props, clean)
