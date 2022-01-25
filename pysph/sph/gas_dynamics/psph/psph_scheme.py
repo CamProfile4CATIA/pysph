@@ -69,7 +69,7 @@ class PSPHScheme(Scheme):
             steppers.update(extra_steppers)
 
         from pysph.sph.integrator import PECIntegrator
-        from pysph.sph.gas_dynamics.hopkins.integrator_step import PECStep
+        from pysph.sph.gas_dynamics.tsph.integrator_step import PECStep
 
         cls = integrator_cls if integrator_cls is not None else PECIntegrator
         step_cls = PECStep
@@ -86,8 +86,9 @@ class PSPHScheme(Scheme):
     def get_equations(self):
         from pysph.sph.equation import Group
         from pysph.sph.gas_dynamics.basic import (MPMUpdateGhostProps)
-        from .equations import (TSPHMomentumAndEnergy,
-                                VelocityGradDivC1, MorrisMonaghanSwitch, PSPHSummationDensityAndPressure)
+        from pysph.sph.gas_dynamics.tsph.equations import (TSPHMomentumAndEnergy,
+                                VelocityGradDivC1, MorrisMonaghanSwitch)
+        from pysph.sph.gas_dynamics.psph.equations import PSPHSummationDensityAndPressure
         from pysph.sph.gas_dynamics.boundary_equations import WallBoundary
 
         equations = []

@@ -3,8 +3,8 @@
 from pysph.examples.gas_dynamics.shocktube_setup import ShockTubeSetup
 from pysph.sph.scheme import ADKEScheme, GasDScheme, GSPHScheme, SchemeChooser
 from pysph.sph.gas_dynamics.cullen_dehnen.scheme import CullenDehnenScheme
-from pysph.sph.gas_dynamics.hopkins.tsph_scheme import TSPHScheme
-from pysph.sph.gas_dynamics.hopkins.psph_scheme import PSPHScheme
+from pysph.sph.gas_dynamics.tsph.tsph_scheme import TSPHScheme
+from pysph.sph.gas_dynamics.psph.psph_scheme import PSPHScheme
 from pysph.sph.wc.crksph import CRKSPHScheme
 from pysph.base.nnps import DomainManager
 
