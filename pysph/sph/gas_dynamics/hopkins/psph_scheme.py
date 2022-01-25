@@ -85,10 +85,9 @@ class PSPHScheme(Scheme):
 
     def get_equations(self):
         from pysph.sph.equation import Group
-        from pysph.sph.gas_dynamics.basic import (IdealGasEOS,
-                                                  MPMUpdateGhostProps)
-        from .equations import (SummationDensity, TSPHMomentumAndEnergy,
-                                VelocityGradDivC1, MorrisMonaghanSwitch)
+        from pysph.sph.gas_dynamics.basic import (MPMUpdateGhostProps)
+        from .equations import (TSPHMomentumAndEnergy,
+                                VelocityGradDivC1, MorrisMonaghanSwitch, PSPHSummationDensityAndPressure)
         from pysph.sph.gas_dynamics.boundary_equations import WallBoundary
 
         equations = []
@@ -97,10 +96,10 @@ class PSPHScheme(Scheme):
         g1 = []
         for fluid in self.fluids:
             g1.append(
-                SummationDensity(
+                PSPHSummationDensityAndPressure(
                     dest=fluid, sources=self.fluids, k=self.kernel_factor,
                     density_iterations=True, dim=self.dim,
-                    htol=self.density_iteration_tolerance
+                    htol=self.density_iteration_tolerance, gamma=self.gamma
                 )
             )
 
@@ -109,11 +108,6 @@ class PSPHScheme(Scheme):
                 max_iterations=self.max_density_iterations
             ))
 
-        g2 = []
-        for fluid in self.fluids:
-            g2.append(IdealGasEOS(dest=fluid, sources=None, gamma=self.gamma))
-
-        equations.append(Group(equations=g2))
         g5 = []
         for fluid in self.fluids:
             g5.append(VelocityGradDivC1(
