@@ -98,16 +98,18 @@ class PSPHSummationDensityAndPressure(Equation):
 
                 # using fi from density entropy formulation for convergence
                 # related checks.
+                # hibynidim = d_h[d_idx] / (d_n[d_idx] * self.dim)
+                # inbrkti = 1 + d_dndh[d_idx] * hibynidim
+                # inprthsi = d_dpsumdh[d_idx] * hibynidim / (
+                #         self.gammam1 * d_m[d_idx] * d_e[d_idx])
+                # fi = 1 - inprthsi / inbrkti
+
                 dndhi = - self.dim * d_n[d_idx] / hi
-                hibynidim = d_h[d_idx] / (d_n[d_idx] * self.dim)
-                inbrkti = 1 + d_dndh[d_idx] * d_h[d_idx] * hibynidim
-                inprthsi = d_dpsumdh[d_idx] * hibynidim / (
-                        self.gammam1 * d_m[d_idx] * d_e[d_idx])
-                fi = 1 - inprthsi / inbrkti
 
                 # correct fi TODO: Remove if not required
-                if fi < 0:
-                    fi = 1.0
+                # if fi < 0:
+                #     fi = 1.0
+
 
                 # the non-linear function and it's derivative
                 func = d_n[d_idx] - ni
@@ -123,13 +125,15 @@ class PSPHSummationDensityAndPressure(Equation):
                     hnew = 0.8 * hi
 
                 # overwrite if gone awry TODO: Remove if not required
-                if (hnew <= 1e-6) or (fi < 1e-6):
-                    hnew = self.k * (mi / d_rho[d_idx]) ** (1. / self.dim)
+                # if (hnew <= 1e-6) or (fi < 1e-6):
+                #     hnew = self.k * (mi / d_rho[d_idx]) ** (1. / self.dim)
 
                 # check for convergence
                 diff = abs(hnew - hi) / hi0
 
-                if not ((diff < self.htol) and (fi > 0) or
+                # if not ((diff < self.htol) and (fi > 0) or
+                #         self.iterate_only_once):
+                if not ((diff < self.htol) or
                         self.iterate_only_once):
                     # this particle hasn't converged. This means the
                     # entire group must be repeated until this fellow
