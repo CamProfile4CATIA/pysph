@@ -27,8 +27,8 @@ class PSPHSummationDensityAndPressure(Equation):
 
         super().__init__(dest, sources)
 
-    def initialize(self, d_idx, d_rho, d_arho, d_drhosumdh, d_n, d_dndh,
-                   d_prevn, d_prevdndh, d_prevdrhosumdh, d_p, d_dpsumdh,
+    def initialize(self, d_idx, d_rho, d_arho, d_n, d_dndh,
+                   d_prevn, d_prevdndh, d_p, d_dpsumdh,
                    d_dprevpsumdh, d_an):
 
         d_rho[d_idx] = 0.0
@@ -36,78 +36,64 @@ class PSPHSummationDensityAndPressure(Equation):
 
         d_prevn[d_idx] = d_n[d_idx]
         d_prevdndh[d_idx] = d_dndh[d_idx]
-
         d_n[d_idx] = 0.0
         d_dndh[d_idx] = 0.0
+        d_an[d_idx] = 0.0
 
         d_p[d_idx] = 0.0
         d_dprevpsumdh[d_idx] = d_dpsumdh[d_idx]
         d_dpsumdh[d_idx] = 0.0
-        d_an[d_idx] = 0.0
 
-        # set the converged attribute for the Equation to True. Within
-        # the post-loop, if any particle hasn't converged, this is set
-        # to False. The Group can therefore iterate till convergence.
         self.equation_has_converged = 1
 
-    def loop(self, d_idx, s_idx, d_rho, d_arho, d_drhosumdh, s_m, VIJ, WI, DWI,
-             GHI, d_n, d_dndh, d_h, d_prevn, d_prevdndh, d_prevdrhosumdh,
+    def loop(self, d_idx, s_idx, d_rho, d_arho, s_m, VIJ, WI, DWI,
+             GHI, d_n, d_dndh, d_h, d_prevn, d_prevdndh,
              s_e, d_p, d_dpsumdh, d_e, d_an):
 
         mj = s_m[s_idx]
         vijdotdwij = VIJ[0] * DWI[0] + VIJ[1] * DWI[1] + VIJ[2] * DWI[2]
 
         # density
-        d_rho[d_idx] += mj * WI
-        d_p[d_idx] += self.gammam1 * s_e[s_idx] * mj * WI
-        # density accelerations
+        mj_wi = mj * WI
+        d_rho[d_idx] += mj_wi
+        d_p[d_idx] += self.gammam1 * s_e[s_idx] * mj_wi
+
+        # number density accelerations
         hibynidim = d_h[d_idx] / (d_prevn[d_idx] * self.dim)
         inbrkti = 1 + d_prevdndh[d_idx] * hibynidim
         inprthsi = d_dpsumdh[d_idx] * hibynidim / (
                 self.gammam1 * s_m[s_idx] * d_e[d_idx])
         fij = 1 - inprthsi / inbrkti
-        d_arho[d_idx] += mj * vijdotdwij * fij
-        d_an[d_idx] += vijdotdwij * fij
+        vijdotdwij_fij = vijdotdwij * fij
+        d_an[d_idx] += vijdotdwij_fij
+
+        # density acceleration is not essential as such
+        d_arho[d_idx] += mj * vijdotdwij_fij
 
         # gradient of kernel w.r.t h
         d_dpsumdh[d_idx] += mj * self.gammam1 * d_e[d_idx] * GHI
         d_n[d_idx] += WI
         d_dndh[d_idx] += GHI
 
-    def post_loop(self, d_idx, d_arho, d_rho, d_drhosumdh, d_h0, d_h, d_m,
-                  d_ah, d_converged, d_cs, d_p, d_n, d_dndh, d_dpsumdh,
-                  d_e, d_an):
+    def post_loop(self, d_idx, d_rho,d_h0, d_h,
+                  d_ah, d_converged, d_cs, d_p, d_n, d_dndh,
+                  d_an):
 
         d_cs[d_idx] = sqrt(self.gamma * d_p[d_idx] / d_rho[d_idx])
 
         # iteratively find smoothing length consistent with the
         if self.density_iterations:
             if not (d_converged[d_idx] == 1):
-                # current mass and smoothing length. The initial
-                # smoothing length h0 for this particle must be set
-                # outside the Group (that is, in the integrator)
-                mi = d_m[d_idx]
                 hi = d_h[d_idx]
                 hi0 = d_h0[d_idx]
 
-                # density from the mass, smoothing length and kernel
-                # scale factor
+                # estimated, without summations
                 ni = (self.k / hi) ** self.dim
-
-                # using fi from density entropy formulation for convergence
-                # related checks.
-                # hibynidim = d_h[d_idx] / (d_n[d_idx] * self.dim)
-                # inbrkti = 1 + d_dndh[d_idx] * hibynidim
-                # inprthsi = d_dpsumdh[d_idx] * hibynidim / (
-                #         self.gammam1 * d_m[d_idx] * d_e[d_idx])
-                # fi = 1 - inprthsi / inbrkti
-
                 dndhi = - self.dim * d_n[d_idx] / hi
 
                 # correct fi TODO: Remove if not required
                 # if fi < 0:
                 #     fi = 1.0
-
 
                 # the non-linear function and it's derivative
                 func = d_n[d_idx] - ni
