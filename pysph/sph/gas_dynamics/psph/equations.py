@@ -6,6 +6,7 @@ from pysph.sph.wc.linalg import identity, gj_solve, augmented_matrix, mat_mult
 
 GHOST_TAG = get_ghost_tag()
 
+
 class PSPHSummationDensityAndPressure(Equation):
     def __init__(self, dest, sources, dim, gamma, density_iterations=False,
                  iterate_only_once=False, k=1.2, htol=1e-6):
@@ -22,12 +23,13 @@ class PSPHSummationDensityAndPressure(Equation):
         self.htol = htol
         self.equation_has_converged = 1
         self.gamma = gamma
-        self.gammam1= gamma-1.0
+        self.gammam1 = gamma - 1.0
 
         super().__init__(dest, sources)
 
     def initialize(self, d_idx, d_rho, d_arho, d_drhosumdh, d_n, d_dndh,
-                   d_prevn, d_prevdndh, d_prevdrhosumdh, d_p):
+                   d_prevn, d_prevdndh, d_prevdrhosumdh, d_p, d_dpsumdh,
+                   d_dprevpsumdh, d_an):
 
         d_rho[d_idx] = 0.0
         d_arho[d_idx] = 0.0
@@ -41,6 +43,9 @@ class PSPHSummationDensityAndPressure(Equation):
         d_dndh[d_idx] = 0.0
 
         d_p[d_idx] = 0.0
+        d_dprevpsumdh[d_idx] = d_dpsumdh[d_idx]
+        d_dpsumdh[d_idx] = 0.0
+        d_an[d_idx] = 0.0
 
         # set the converged attribute for the Equation to True. Within
         # the post-loop, if any particle hasn't converged, this is set
@@ -49,7 +54,7 @@ class PSPHSummationDensityAndPressure(Equation):
 
     def loop(self, d_idx, s_idx, d_rho, d_arho, d_drhosumdh, s_m, VIJ, WI, DWI,
              GHI, d_n, d_dndh, d_h, d_prevn, d_prevdndh, d_prevdrhosumdh,
-             s_e, d_p):
+             s_e, d_p, d_dpsumdh, d_e, d_an):
 
         mj = s_m[s_idx]
         vijdotdwij = VIJ[0] * DWI[0] + VIJ[1] * DWI[1] + VIJ[2] * DWI[2]
@@ -63,14 +68,17 @@ class PSPHSummationDensityAndPressure(Equation):
         inprthsi = d_prevdrhosumdh[d_idx] * hibynidim
         fij = 1 - inprthsi / (s_m[s_idx] * inbrkti)
         d_arho[d_idx] += mj * vijdotdwij * fij
+        d_an[d_idx] += vijdotdwij * fij
 
         # gradient of kernel w.r.t h
         d_drhosumdh[d_idx] += mj * GHI
+        d_dpsumdh[d_idx] += mj * self.gammam1 * d_e[d_idx] * GHI
         d_n[d_idx] += WI
         d_dndh[d_idx] += GHI
 
     def post_loop(self, d_idx, d_arho, d_rho, d_drhosumdh, d_h0, d_h, d_m,
-                  d_ah, d_converged, d_cs, d_p):
+                  d_ah, d_converged, d_cs, d_p, d_n, d_dndh, d_dpsumdh,
+                  d_e, d_an):
 
         d_cs[d_idx] = sqrt(self.gamma * d_p[d_idx] / d_rho[d_idx])
 
@@ -86,43 +94,42 @@ class PSPHSummationDensityAndPressure(Equation):
 
                 # density from the mass, smoothing length and kernel
                 # scale factor
-                rhoi = mi / (hi / self.k) ** self.dim
+                ni = (self.k / hi) ** self.dim
 
                 # using fi from density entropy formulation for convergence
                 # related checks.
-                dhdrhoi = -hi / (self.dim * d_rho[d_idx])
-                obyfi = 1.0 - dhdrhoi * d_drhosumdh[d_idx]
+                dndhi = - self.dim * d_n[d_idx] / hi
+                hibynidim = d_h[d_idx] / (d_n[d_idx] * self.dim)
+                inbrkti = 1 + d_dndh[d_idx] * d_h[d_idx] * hibynidim
+                inprthsi = d_dpsumdh[d_idx] * hibynidim / (
+                        self.gammam1 * d_m[d_idx] * d_e[d_idx])
+                fi = 1 - inprthsi / inbrkti
 
                 # correct fi TODO: Remove if not required
-                if obyfi < 0:
-                    obyfi = 1.0
-
-                # kernel multiplier. These are the multiplicative
-                # pre-factors, or the "grah-h" terms in the
-                # equations. Remember that the equations use 1/omega
-                fi = 1.0 / obyfi
+                if fi < 0:
+                    fi = 1.0
 
                 # the non-linear function and it's derivative
-                func = d_rho[d_idx] - rhoi
-                dfdh = d_drhosumdh[d_idx] - 1 / dhdrhoi
+                func = d_n[d_idx] - ni
+                dfdh = d_dndh[d_idx] - dndhi
 
                 # Newton Raphson estimate for the new h
                 hnew = hi - func / dfdh
 
                 # Nanny control for h TODO: Remove if not required
-                if (hnew > 1.2 * hi):
+                if hnew > 1.2 * hi:
                     hnew = 1.2 * hi
-                elif (hnew < 0.8 * hi):
+                elif hnew < 0.8 * hi:
                     hnew = 0.8 * hi
 
                 # overwrite if gone awry TODO: Remove if not required
-                if ((hnew <= 1e-6) or (fi < 1e-6)):
+                if (hnew <= 1e-6) or (fi < 1e-6):
                     hnew = self.k * (mi / d_rho[d_idx]) ** (1. / self.dim)
 
                 # check for convergence
                 diff = abs(hnew - hi) / hi0
 
-                if not ((diff < self.htol) and (obyfi > 0) or
+                if not ((diff < self.htol) and (fi > 0) or
                         self.iterate_only_once):
                     # this particle hasn't converged. This means the
                     # entire group must be repeated until this fellow
@@ -136,9 +143,8 @@ class PSPHSummationDensityAndPressure(Equation):
                     d_h[d_idx] = hnew
                     d_converged[d_idx] = 0
                 else:
-                    d_ah[d_idx] = d_arho[d_idx] * dhdrhoi
+                    d_ah[d_idx] = d_an[d_idx] / dndhi
                     d_converged[d_idx] = 1
 
     def converged(self):
         return self.equation_has_converged
-

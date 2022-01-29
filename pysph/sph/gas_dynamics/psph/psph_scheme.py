@@ -46,7 +46,6 @@ class PSPHScheme(Scheme):
             help="Gamma for the state equation."
         )
 
-
     def consume_user_options(self, options):
         vars = ['gamma', 'alpha2', 'alpha1', 'beta']
         data = dict((var, self._smart_getattr(options, var)) for var in vars)
@@ -86,9 +85,11 @@ class PSPHScheme(Scheme):
     def get_equations(self):
         from pysph.sph.equation import Group
         from pysph.sph.gas_dynamics.basic import (MPMUpdateGhostProps)
-        from pysph.sph.gas_dynamics.tsph.equations import (TSPHMomentumAndEnergy,
-                                VelocityGradDivC1, MorrisMonaghanSwitch)
-        from pysph.sph.gas_dynamics.psph.equations import PSPHSummationDensityAndPressure
+        from pysph.sph.gas_dynamics.tsph.equations import (
+            TSPHMomentumAndEnergy,
+            VelocityGradDivC1, MorrisMonaghanSwitch)
+        from pysph.sph.gas_dynamics.psph.equations import \
+            PSPHSummationDensityAndPressure
         from pysph.sph.gas_dynamics.boundary_equations import WallBoundary
 
         equations = []
@@ -159,7 +160,7 @@ class PSPHScheme(Scheme):
                  'aalpha1', 'alpha10', 'h0', 'converged', 'ah', 'arho',
                  'dt_cfl', 'e0', 'rho0', 'u0', 'v0', 'w0', 'x0', 'y0', 'z0']
         more_props = ['drhosumdh', 'n', 'dndh', 'prevn', 'prevdndh',
-                      'prevdrhosumdh', 'divv']
+                      'prevdrhosumdh', 'divv', 'dpsumdh', 'dprevpsumdh', 'an']
         props.extend(more_props)
         output_props = []
         for fluid in self.fluids:
