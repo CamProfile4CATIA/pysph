@@ -35,10 +35,8 @@ class PSPHSummationDensityAndPressure(Equation):
         d_arho[d_idx] = 0.0
 
         d_prevn[d_idx] = d_n[d_idx]
-        d_prevdrhosumdh[d_idx] = d_drhosumdh[d_idx]
         d_prevdndh[d_idx] = d_dndh[d_idx]
 
-        d_drhosumdh[d_idx] = 0.0
         d_n[d_idx] = 0.0
         d_dndh[d_idx] = 0.0
 
@@ -72,7 +70,6 @@ class PSPHSummationDensityAndPressure(Equation):
         d_an[d_idx] += vijdotdwij * fij
 
         # gradient of kernel w.r.t h
-        d_drhosumdh[d_idx] += mj * GHI
         d_dpsumdh[d_idx] += mj * self.gammam1 * d_e[d_idx] * GHI
         d_n[d_idx] += WI
         d_dndh[d_idx] += GHI
