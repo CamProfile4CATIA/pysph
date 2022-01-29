@@ -64,7 +64,7 @@ class PSPHSummationDensityAndPressure(Equation):
         d_p[d_idx] += self.gammam1 * s_e[s_idx] * mj * WI
         # density accelerations
         hibynidim = d_h[d_idx] / (d_prevn[d_idx] * self.dim)
-        inbrkti = 1 + d_prevdndh[d_idx] * d_h[d_idx] * hibynidim
+        inbrkti = 1 + d_prevdndh[d_idx] * hibynidim
         inprthsi = d_prevdrhosumdh[d_idx] * hibynidim
         fij = 1 - inprthsi / (s_m[s_idx] * inbrkti)
         d_arho[d_idx] += mj * vijdotdwij * fij
