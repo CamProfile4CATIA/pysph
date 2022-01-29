@@ -89,7 +89,7 @@ class PSPHScheme(Scheme):
             TSPHMomentumAndEnergy,
             VelocityGradDivC1, MorrisMonaghanSwitch)
         from pysph.sph.gas_dynamics.psph.equations import \
-            PSPHSummationDensityAndPressure
+            PSPHSummationDensityAndPressure, GradientKinsfolkC1
         from pysph.sph.gas_dynamics.boundary_equations import WallBoundary
 
         equations = []
@@ -112,7 +112,7 @@ class PSPHScheme(Scheme):
 
         g5 = []
         for fluid in self.fluids:
-            g5.append(VelocityGradDivC1(
+            g5.append(GradientKinsfolkC1(
                 dest=fluid,
                 sources=self.fluids + self.solids,
                 dim=self.dim))
@@ -160,7 +160,8 @@ class PSPHScheme(Scheme):
                  'aalpha1', 'alpha10', 'h0', 'converged', 'ah', 'arho',
                  'dt_cfl', 'e0', 'rho0', 'u0', 'v0', 'w0', 'x0', 'y0', 'z0']
         more_props = ['drhosumdh', 'n', 'dndh', 'prevn', 'prevdndh',
-                      'prevdrhosumdh', 'divv', 'dpsumdh', 'dprevpsumdh', 'an']
+                      'prevdrhosumdh', 'divv', 'dpsumdh', 'dprevpsumdh', 'an',
+                      'adivv', 'trssdsst']
         props.extend(more_props)
         output_props = []
         for fluid in self.fluids:
@@ -171,6 +172,8 @@ class PSPHScheme(Scheme):
             pa.add_property('n', data=pa.rho / pa.m)
             pa.add_property('gradv', stride=9)
             pa.add_property('invtt', stride=9)
+            pa.add_property('grada', stride=9)
+            pa.add_property('ss', stride=6)
             nfp = pa.get_number_of_particles()
             pa.orig_idx[:] = numpy.arange(nfp)
             pa.set_output_arrays(output_props)
