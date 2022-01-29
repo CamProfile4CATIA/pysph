@@ -68,7 +68,7 @@ class PSPHScheme(Scheme):
             steppers.update(extra_steppers)
 
         from pysph.sph.integrator import PECIntegrator
-        from pysph.sph.gas_dynamics.tsph.integrator_step import PECStep
+        from pysph.sph.gas_dynamics.psph.pec_step import PECStep
 
         cls = integrator_cls if integrator_cls is not None else PECIntegrator
         step_cls = PECStep
