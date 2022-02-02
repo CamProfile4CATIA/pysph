@@ -86,10 +86,10 @@ class PSPHScheme(Scheme):
         from pysph.sph.equation import Group
         from pysph.sph.gas_dynamics.basic import (MPMUpdateGhostProps)
         from pysph.sph.gas_dynamics.tsph.equations import (
-            TSPHMomentumAndEnergy,
-            VelocityGradDivC1, MorrisMonaghanSwitch)
-        from pysph.sph.gas_dynamics.psph.equations import \
-            PSPHSummationDensityAndPressure, GradientKinsfolkC1
+            MorrisMonaghanSwitch)
+        from pysph.sph.gas_dynamics.psph.equations import (
+            PSPHSummationDensityAndPressure, GradientKinsfolkC1,
+            SignalVelocity, LimiterAndAlphas, MomentumAndEnergy)
         from pysph.sph.gas_dynamics.boundary_equations import WallBoundary
 
         equations = []
@@ -117,6 +117,11 @@ class PSPHScheme(Scheme):
                 sources=self.fluids + self.solids,
                 dim=self.dim))
 
+            g5.append(SignalVelocity(
+                dest=fluid,
+                sources=self.fluids + self.solids,
+            ))
+
             g5.append(MorrisMonaghanSwitch(
                 dest=fluid,
                 sources=None,
@@ -124,6 +129,14 @@ class PSPHScheme(Scheme):
                 sigma=0.1
             ))
         equations.append(Group(equations=g5))
+
+        g2 = []
+        for fluid in self.fluids:
+            g2.append(LimiterAndAlphas(
+                dest=fluid,
+                sources=self.fluids))
+        equations.append(Group(equations=g2))
+
 
         g3 = []
         for solid in self.solids:
@@ -140,7 +153,7 @@ class PSPHScheme(Scheme):
 
         g4 = []
         for fluid in self.fluids:
-            g4.append(TSPHMomentumAndEnergy(
+            g4.append(MomentumAndEnergy(
                 dest=fluid, sources=self.fluids + self.solids,
                 dim=self.dim,
                 beta=self.beta,
@@ -161,7 +174,7 @@ class PSPHScheme(Scheme):
                  'dt_cfl', 'e0', 'rho0', 'u0', 'v0', 'w0', 'x0', 'y0', 'z0']
         more_props = ['drhosumdh', 'n', 'dndh', 'prevn', 'prevdndh',
                       'prevdrhosumdh', 'divv', 'dpsumdh', 'dprevpsumdh', 'an',
-                      'adivv', 'trssdsst']
+                      'adivv', 'trssdsst', 'vsig', 'alpha', 'alpha0', 'xi', "R"]
         props.extend(more_props)
         output_props = []
         for fluid in self.fluids:
