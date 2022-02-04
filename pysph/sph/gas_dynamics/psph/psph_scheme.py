@@ -3,7 +3,7 @@ from pysph.sph.scheme import Scheme, add_bool_argument
 
 class PSPHScheme(Scheme):
     def __init__(self, fluids, solids, dim, gamma, kernel_factor, alpha1=1.0,
-                 alpha2=0.0, beta=2.0, update_alpha2=False, fkern=1.0,
+                 alpha2=0.0, betab=2.0, update_alpha2=False, fkern=1.0,
                  max_density_iterations=250, alphaav=1.0, alphac=0.25,
                  density_iteration_tolerance=1e-3, has_ghosts=False):
 
@@ -15,7 +15,7 @@ class PSPHScheme(Scheme):
         self.alpha1 = alpha1
         self.alpha2 = alpha2
         self.update_alpha2 = update_alpha2
-        self.beta = beta
+        self.betab = betab
         self.kernel_factor = kernel_factor
         self.density_iteration_tolerance = density_iteration_tolerance
         self.max_density_iterations = max_density_iterations
@@ -32,7 +32,7 @@ class PSPHScheme(Scheme):
             help="Alpha1 for the artificial viscosity."
         )
         group.add_argument(
-            "--beta", action="store", type=float, dest="beta",
+            "--betab", action="store", type=float, dest="betab",
             default=None,
             help="Beta for the artificial viscosity."
         )
@@ -48,7 +48,7 @@ class PSPHScheme(Scheme):
         )
 
     def consume_user_options(self, options):
-        vars = ['gamma', 'alpha2', 'alpha1', 'beta']
+        vars = ['gamma', 'alpha2', 'alpha1', 'betab']
         data = dict((var, self._smart_getattr(options, var)) for var in vars)
         self.configure(**data)
 
@@ -157,9 +157,10 @@ class PSPHScheme(Scheme):
             g4.append(MomentumAndEnergy(
                 dest=fluid, sources=self.fluids + self.solids,
                 dim=self.dim,
-                beta=self.beta,
+                betab=self.betab,
                 fkern=self.fkern,
-                alphac=self.alphac
+                alphac=self.alphac,
+                gamma=self.gamma
             ))
 
         equations.append(Group(equations=g4))

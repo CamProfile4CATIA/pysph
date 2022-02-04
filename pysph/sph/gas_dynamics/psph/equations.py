@@ -281,13 +281,12 @@ class SignalVelocity(Equation):
 
 class LimiterAndAlphas(Equation):
     def __init__(self, dest, sources, alphamin=0.02, alphamax=2.0, betac=0.7,
-                 betad=0.05, betaxi=1.0, betab=1.0, fkern=1.0):
+                 betad=0.05, betaxi=1.0, fkern=1.0):
         self.alphamin = alphamin
         self.alphamax = alphamax
         self.betac = betac
         self.betad = betad
         self.betaxi = betaxi
-        self.betab = betab
         self.fkern = fkern
         super().__init__(dest, sources)
 
@@ -336,11 +335,13 @@ class LimiterAndAlphas(Equation):
 
 
 class MomentumAndEnergy(Equation):
-    def __init__(self, dest, sources, dim, fkern, beta=2.0, alphac=0.25):
-        self.beta = beta
+    def __init__(self, dest, sources, dim, fkern, gamma, betab=2.0,
+                 alphac=0.25):
+        self.betab = betab
         self.dim = dim
         self.fkern = fkern
         self.alphac = alphac
+        self.gammam1 = gamma - 1.0
         super().__init__(dest, sources)
 
     def initialize(self, d_idx, d_au, d_av, d_aw, d_ae, d_dt_cfl):
@@ -354,9 +355,11 @@ class MomentumAndEnergy(Equation):
     def loop(self, d_idx, s_idx, d_m, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
              d_au, d_av, d_aw, d_ae, XIJ, VIJ, DWI, DWJ, HIJ, d_alpha1,
              s_alpha1, RIJ, R2IJ, RHOIJ, d_dt_cfl, d_h, d_dndh, d_n,
-             d_drhosumdh, s_h, s_dndh, s_n, s_drhosumdh, DWIJ, d_e, s_e):
+             d_drhosumdh, s_h, s_dndh, s_n, s_drhosumdh, DWIJ, d_e, s_e,
+             d_dpsumdh, s_dpsumdh):
 
         dim = self.dim
+        gammam1 = self.gammam1
         avi = declare("matrix(3)")
 
         # particle pressure
@@ -395,15 +398,16 @@ class MomentumAndEnergy(Equation):
 
         # Artificial viscosity
         if vijdotxij <= 0.0:
-            # viscosity
             alpha1 = 0.5 * (d_alpha1[d_idx] + s_alpha1[s_idx])
             muij = hij * vijdotxij / (R2IJ + 0.0001 * hij ** 2)
-            common = alpha1 * muij * (cij - 2 * muij) * mj / (2 * RHOIJ)
+            twrhoij = (2 * RHOIJ)
+            common = alpha1 * muij * (cij - self.betab * muij) * mj / twrhoij
 
             avi[0] = common * (DWI[0] + DWJ[0])
             avi[1] = common * (DWI[1] + DWJ[1])
             avi[2] = common * (DWI[2] + DWJ[2])
 
+            # viscous contribution to velocity
             d_au[d_idx] += avi[0]
             d_av[d_idx] += avi[1]
             d_aw[d_idx] += avi[2]
@@ -416,29 +420,32 @@ class MomentumAndEnergy(Equation):
             # artificial conductivity
             eij = d_e[d_idx] - s_e[s_idx]
             Lij = abs(d_p[d_idx] - s_p[s_idx]) / (d_p[d_idx] + s_p[s_idx])
-            rhoij = 0.5 * (d_rho[d_idx] + s_rho[s_idx])
-            d_ae[d_idx] += (self.alphac * mj * alpha1 * vs * eij * Lij * Fij /
-                            rhoij)
+            d_ae[d_idx] += (self.alphac * mj * alpha1 * vs * eij * Lij * Fij
+                            / twrhoij)
 
         # grad-h correction terms.
         hibynidim = d_h[d_idx] / (d_n[d_idx] * dim)
-        inbrkti = 1 + d_dndh[d_idx] * d_h[d_idx] * hibynidim
-        inprthsi = d_drhosumdh[d_idx] * hibynidim
-        fij = 1 - inprthsi / (s_m[s_idx] * inbrkti)
+        inbrkti = 1 + d_dndh[d_idx] * hibynidim
+        inprthsi = d_dpsumdh[d_idx] * hibynidim / (
+                gammam1 * s_m[s_idx] * d_e[d_idx])
+        fij = 1 - inprthsi / inbrkti
 
         hjbynjdim = s_h[s_idx] / (s_n[s_idx] * dim)
-        inbrktj = 1 + s_dndh[s_idx] * s_h[s_idx] * hjbynjdim
-        inprthsj = s_drhosumdh[s_idx] * hibynidim
-        fji = 1 - inprthsj / (d_m[d_idx] * inbrktj)
+        inbrktj = 1 + s_dndh[s_idx] * hjbynjdim
+        inprthsj = s_dpsumdh[s_idx] * hjbynjdim / (
+                self.gammam1 * d_m[d_idx] * s_e[s_idx])
+        fji = 1 - inprthsj / inbrktj
 
         # accelerations for velocity
-        mj_pibrhoi_fij = mj * pibrhoi2 * fij
-        mj_pjbrhoj_fji = mj * pjbrhoj2 * fji
+        gammam1sq = gammam1 * gammam1
+        comm = gammam1sq * mj * d_e[d_idx] * s_e[s_idx]
+        commi = comm * fij / d_p[d_idx]
+        commj = comm * fji / s_p[s_idx]
 
-        d_au[d_idx] -= mj_pibrhoi_fij * DWI[0] + mj_pjbrhoj_fji * DWJ[0]
-        d_av[d_idx] -= mj_pibrhoi_fij * DWI[1] + mj_pjbrhoj_fji * DWJ[1]
-        d_aw[d_idx] -= mj_pibrhoi_fij * DWI[2] + mj_pjbrhoj_fji * DWJ[2]
+        d_au[d_idx] -= commi * DWI[0] + commj * DWJ[0]
+        d_av[d_idx] -= commi * DWI[1] + commj * DWJ[1]
+        d_aw[d_idx] -= commi * DWI[2] + commj * DWJ[2]
 
         # accelerations for the thermal energy
         vijdotdwi = VIJ[0] * DWI[0] + VIJ[1] * DWI[1] + VIJ[2] * DWI[2]
-        d_ae[d_idx] += mj * pibrhoi2 * fij * vijdotdwi
+        d_ae[d_idx] += commi * vijdotdwi
