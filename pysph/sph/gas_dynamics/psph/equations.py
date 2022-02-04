@@ -332,13 +332,15 @@ class LimiterAndAlphas(Equation):
         if alden < 1e-8:
             d_alpha[d_idx] = self.alphamin
         else:
-            d_alpha[d_idx] = max(alnum/alden, self.alphamin)
+            d_alpha[d_idx] = max(alnum / alden, self.alphamin)
+
 
 class MomentumAndEnergy(Equation):
-    def __init__(self, dest, sources, dim, fkern, beta=2.0):
+    def __init__(self, dest, sources, dim, fkern, beta=2.0, alphac=0.25):
         self.beta = beta
         self.dim = dim
         self.fkern = fkern
+        self.alphac = alphac
         super().__init__(dest, sources)
 
     def initialize(self, d_idx, d_au, d_av, d_aw, d_ae, d_dt_cfl):
@@ -352,9 +354,10 @@ class MomentumAndEnergy(Equation):
     def loop(self, d_idx, s_idx, d_m, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
              d_au, d_av, d_aw, d_ae, XIJ, VIJ, DWI, DWJ, HIJ, d_alpha1,
              s_alpha1, RIJ, R2IJ, RHOIJ, d_dt_cfl, d_h, d_dndh, d_n,
-             d_drhosumdh, s_h, s_dndh, s_n, s_drhosumdh):
+             d_drhosumdh, s_h, s_dndh, s_n, s_drhosumdh, DWIJ, d_e, s_e):
 
         dim = self.dim
+        avi = declare("matrix(3)")
 
         # particle pressure
         p_i = d_p[d_idx]
@@ -377,14 +380,16 @@ class MomentumAndEnergy(Equation):
 
         if RIJ < 1e-8:
             vs = 2 * cij
+            # scalar part of the kernel gradient DWIJ
+            Fij = 0.0
         else:
             vs = 2 * cij - 3 * vijdotxij / RIJ
-
+            # scalar part of the kernel gradient DWIJ
+            Fij = 0.5 * (XIJ[0] * (DWI[0] + DWJ[0]) +
+                         XIJ[1] * (DWI[1] + DWJ[1]) +
+                         XIJ[2] * (DWI[2] + DWJ[2]))
 
         # Is this really reqd?
-        # # v_{ij} \cdot r_{ij} or vijdotxij
-        # dot = VIJ[0] * XIJ[0] + VIJ[1] * XIJ[1] + VIJ[2] * XIJ[2]
-        #
         # # compute the Courant-limited time step factor.
         # d_dt_cfl[d_idx] = max(d_dt_cfl[d_idx], cij + self.beta * dot)
 
@@ -395,16 +400,25 @@ class MomentumAndEnergy(Equation):
             muij = hij * vijdotxij / (R2IJ + 0.0001 * hij ** 2)
             common = alpha1 * muij * (cij - 2 * muij) * mj / (2 * RHOIJ)
 
-            aaui = common * (DWI[0] + DWJ[0])
-            aavi = common * (DWI[1] + DWJ[1])
-            aawi = common * (DWI[2] + DWJ[2])
-            d_au[d_idx] += aaui
-            d_av[d_idx] += aavi
-            d_aw[d_idx] += aawi
+            avi[0] = common * (DWI[0] + DWJ[0])
+            avi[1] = common * (DWI[1] + DWJ[1])
+            avi[2] = common * (DWI[2] + DWJ[2])
+
+            d_au[d_idx] += avi[0]
+            d_av[d_idx] += avi[1]
+            d_aw[d_idx] += avi[2]
 
             # viscous contribution to the thermal energy
-            d_ae[d_idx] -= 0.5 * (
-                    VIJ[0] * aaui + VIJ[1] * aavi + VIJ[2] * aawi)
+            d_ae[d_idx] -= 0.5 * (VIJ[0] * avi[0] +
+                                  VIJ[1] * avi[1] +
+                                  VIJ[2] * avi[2])
+
+            # artificial conductivity
+            eij = d_e[d_idx] - s_e[s_idx]
+            Lij = abs(d_p[d_idx] - s_p[s_idx]) / (d_p[d_idx] + s_p[s_idx])
+            rhoij = 0.5 * (d_rho[d_idx] + s_rho[s_idx])
+            d_ae[d_idx] += (self.alphac * mj * alpha1 * vs * eij * Lij * Fij /
+                            rhoij)
 
         # grad-h correction terms.
         hibynidim = d_h[d_idx] / (d_n[d_idx] * dim)

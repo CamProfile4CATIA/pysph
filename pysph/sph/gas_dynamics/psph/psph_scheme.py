@@ -4,7 +4,7 @@ from pysph.sph.scheme import Scheme, add_bool_argument
 class PSPHScheme(Scheme):
     def __init__(self, fluids, solids, dim, gamma, kernel_factor, alpha1=1.0,
                  alpha2=0.0, beta=2.0, update_alpha2=False, fkern=1.0,
-                 max_density_iterations=250, alphaav=1.0,
+                 max_density_iterations=250, alphaav=1.0, alphac=0.25,
                  density_iteration_tolerance=1e-3, has_ghosts=False):
 
         self.fluids = fluids
@@ -22,6 +22,7 @@ class PSPHScheme(Scheme):
         self.has_ghosts = has_ghosts
         self.fkern = fkern
         self.alphaav = alphaav
+        self.alphac=alphac
 
     def add_user_options(self, group):
 
@@ -157,7 +158,8 @@ class PSPHScheme(Scheme):
                 dest=fluid, sources=self.fluids + self.solids,
                 dim=self.dim,
                 beta=self.beta,
-                fkern=self.fkern
+                fkern=self.fkern,
+                alphac=self.alphac
             ))
 
         equations.append(Group(equations=g4))
