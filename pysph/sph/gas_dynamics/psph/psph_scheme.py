@@ -5,7 +5,9 @@ class PSPHScheme(Scheme):
     def __init__(self, fluids, solids, dim, gamma, kernel_factor, alpha1=1.0,
                  alpha2=0.0, betab=2.0, update_alpha2=False, fkern=1.0,
                  max_density_iterations=250, alphaav=1.0, alphac=0.25,
-                 density_iteration_tolerance=1e-3, has_ghosts=False):
+                 density_iteration_tolerance=1e-3, has_ghosts=False,
+                 alphamin=0.02, alphamax=2.0, betac=0.7,
+                 betad=0.05, betaxi=1.0):
 
         self.fluids = fluids
         self.solids = solids
@@ -23,6 +25,12 @@ class PSPHScheme(Scheme):
         self.fkern = fkern
         self.alphaav = alphaav
         self.alphac = alphac
+        self.alphamin = alphamin
+        self.alphamax = alphamax
+        self.betac = betac
+        self.betad = betad
+        self.betaxi = betaxi
+
 
     def add_user_options(self, group):
 
@@ -85,11 +93,11 @@ class PSPHScheme(Scheme):
 
     def get_equations(self):
         from pysph.sph.equation import Group
-        from pysph.sph.gas_dynamics.basic import (MPMUpdateGhostProps)
         from pysph.sph.gas_dynamics.psph.equations import (
             PSPHSummationDensityAndPressure, GradientKinsfolkC1,
-            SignalVelocity, LimiterAndAlphas, MomentumAndEnergy)
-        from pysph.sph.gas_dynamics.boundary_equations import WallBoundary
+            SignalVelocity, LimiterAndAlphas, MomentumAndEnergy, WallBoundary,
+            UpdateGhostProps
+        )
 
         equations = []
         # Find the optimal 'h'
@@ -114,7 +122,8 @@ class PSPHScheme(Scheme):
             g2.append(GradientKinsfolkC1(
                 dest=fluid,
                 sources=self.fluids + self.solids,
-                dim=self.dim))
+                dim=self.dim,
+            ))
 
             g2.append(SignalVelocity(
                 dest=fluid,
@@ -126,7 +135,14 @@ class PSPHScheme(Scheme):
         for fluid in self.fluids:
             g3.append(LimiterAndAlphas(
                 dest=fluid,
-                sources=self.fluids))
+                sources=self.fluids,
+                alphamin=self.alphamin,
+                alphamax=self.alphamax,
+                betac=self.betac,
+                betad=self.betad,
+                betaxi=self.betaxi,
+                fkern=self.fkern
+            ))
         equations.append(Group(equations=g3))
 
         g4 = []
@@ -138,7 +154,7 @@ class PSPHScheme(Scheme):
             gh = []
             for fluid in self.fluids:
                 gh.append(
-                    MPMUpdateGhostProps(dest=fluid, sources=None)
+                    UpdateGhostProps(dest=fluid, sources=None)
                 )
             equations.append(Group(equations=gh, real=False))
 
@@ -167,8 +183,7 @@ class PSPHScheme(Scheme):
                  'x0', 'y0', 'z0']
         more_props = ['drhosumdh', 'n', 'dndh', 'prevn', 'prevdndh',
                       'prevdrhosumdh', 'divv', 'dpsumdh', 'dprevpsumdh', 'an',
-                      'adivv', 'trssdsst', 'vsig', 'alpha', 'alpha0', 'xi',
-                      "R"]
+                      'adivv', 'trssdsst', 'vsig', 'alpha', 'alpha0', 'xi']
         props.extend(more_props)
         output_props = []
         for fluid in self.fluids:

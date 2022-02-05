@@ -191,7 +191,6 @@ class GradientKinsfolkC1(Equation):
         ltstart_indx, dltrowcol = declare('int', 2)
         dim = self.dim
         start_indx = 9 * d_idx
-        ltstart_indx = 6 * d_idx
         identity(idmat, 3)
         identity(tt, 3)
 
@@ -435,3 +434,77 @@ class MomentumAndEnergy(Equation):
         # accelerations for the thermal energy
         vijdotdwi = VIJ[0] * DWI[0] + VIJ[1] * DWI[1] + VIJ[2] * DWI[2]
         d_ae[d_idx] += commi * vijdotdwi
+
+
+class WallBoundary(Equation):
+    def initialize(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_h,
+                   d_htmp, d_h0, d_u, d_v, d_w, d_wij, d_n, d_dndh,
+                   d_psumdh):
+        d_p[d_idx] = 0.0
+        d_u[d_idx] = 0.0
+        d_v[d_idx] = 0.0
+        d_w[d_idx] = 0.0
+        d_m[d_idx] = 0.0
+        d_rho[d_idx] = 0.0
+        d_e[d_idx] = 0.0
+        d_cs[d_idx] = 0.0
+        d_wij[d_idx] = 0.0
+        d_h[d_idx] = d_h0[d_idx]
+        d_htmp[d_idx] = 0.0
+        d_n[d_idx] = 0.0
+        d_dndh[d_idx] = 0.0
+        d_psumdh[d_idx] = 0.0
+
+    def loop(self, d_idx, s_idx, d_p, d_rho, d_e, d_m, d_cs, d_u, d_v, d_w,
+             d_wij, d_htmp, s_p, s_rho, s_e, s_m, s_cs, s_h,
+             s_u, s_v, s_w, WI, s_n, d_n, d_dndh, s_dndh, d_psumdh,
+             s_psumdh):
+        d_wij[d_idx] += WI
+        d_p[d_idx] += s_p[s_idx] * WI
+        d_u[d_idx] -= s_u[s_idx] * WI
+        d_v[d_idx] -= s_v[s_idx] * WI
+        d_w[d_idx] -= s_w[s_idx] * WI
+        d_m[d_idx] += s_m[s_idx] * WI
+        d_rho[d_idx] += s_rho[s_idx] * WI
+        d_e[d_idx] += s_e[s_idx] * WI
+        d_cs[d_idx] += s_cs[s_idx] * WI
+        d_htmp[d_idx] += s_h[s_idx] * WI
+        d_n[d_idx] += s_n[s_idx] * WI
+        d_dndh[d_idx] += s_dndh[s_idx] * WI
+        d_psumdh[d_idx] += s_psumdh[s_idx] * WI
+
+    def post_loop(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_h, d_u,
+                  d_v, d_w, d_wij, d_htmp, d_dndh, d_psumdh, d_n):
+        if d_wij[d_idx] > 1e-30:
+            d_p[d_idx] = d_p[d_idx] / d_wij[d_idx]
+            d_u[d_idx] = d_u[d_idx] / d_wij[d_idx]
+            d_v[d_idx] = d_v[d_idx] / d_wij[d_idx]
+            d_w[d_idx] = d_w[d_idx] / d_wij[d_idx]
+            d_m[d_idx] = d_m[d_idx] / d_wij[d_idx]
+            d_rho[d_idx] = d_rho[d_idx] / d_wij[d_idx]
+            d_e[d_idx] = d_e[d_idx] / d_wij[d_idx]
+            d_cs[d_idx] = d_cs[d_idx] / d_wij[d_idx]
+            d_h[d_idx] = d_htmp[d_idx] / d_wij[d_idx]
+            d_dndh[d_idx] /= d_wij[d_idx]
+            d_psumdh[d_idx] /= d_wij[d_idx]
+            d_n[d_idx] /= d_wij[d_idx]
+
+
+class UpdateGhostProps(Equation):
+    def __init__(self, dest, sources=None, dim=2):
+        super().__init__(dest, sources)
+        self.dim = dim
+        assert GHOST_TAG == 2
+
+    def initialize(self, d_idx, d_orig_idx, d_p, d_tag, d_h,
+                  d_rho, d_dndh, d_psumdh, d_n):
+        idx = declare('int')
+        if d_tag[d_idx] == 2:
+            idx = d_orig_idx[d_idx]
+            d_p[d_idx] = d_p[idx]
+            d_h[d_idx] = d_h[idx]
+            d_rho[d_idx] = d_rho[idx]
+            d_dndh[d_idx] = d_dndh[idx]
+            d_psumdh[d_idx] = d_psumdh[idx]
+            d_n[d_idx] = d_n[idx]
+
