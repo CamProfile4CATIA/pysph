@@ -224,7 +224,7 @@ class GradientKinsfolkC1(Equation):
                 drowcol = start_indx + rowcol
                 d_gradv[drowcol] = gradvls[rowcol]
                 d_grada[drowcol] = gradals[rowcol]
-                d_adivv[d_idx] -= gradals[rowcol] + gradals[colrow]
+                d_adivv[d_idx] -= gradals[rowcol] * gradals[colrow]
 
         # Traceless Symmetric Strain Rate
         divvbydim = d_divv[d_idx] / dim
@@ -294,9 +294,8 @@ class LimiterAndAlphas(Equation):
         d_xi[d_idx] = 0.0
 
     def loop(self, d_idx, s_idx, s_m, d_xi, s_divv, WI):
-        if abs(s_divv[s_idx]) < 1e-10:
-            sign = 0.0
-        elif s_divv[s_idx] < 0:
+
+        if s_divv[s_idx] < 0:
             sign = -1.0
         else:
             sign = 1.0
@@ -304,7 +303,7 @@ class LimiterAndAlphas(Equation):
         d_xi[d_idx] += sign * s_m[s_idx] * WI
 
     def post_loop(self, d_idx, d_xi, d_rho, d_h, d_adivv, d_cs, d_alpha0,
-                  d_vsig, dt, d_divv, d_trssdsst, d_alpha, d_alpha1):
+                  d_vsig, dt, d_divv, d_trssdsst, d_alpha):
         d_xi[d_idx] = 1.0 - d_xi[d_idx] / d_rho[d_idx]
         fhi = self.fkern * d_h[d_idx]
 
@@ -353,26 +352,13 @@ class MomentumAndEnergy(Equation):
         d_dt_cfl[d_idx] = 0.0
 
     def loop(self, d_idx, s_idx, d_m, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
-             d_au, d_av, d_aw, d_ae, XIJ, VIJ, DWI, DWJ, HIJ, d_alpha1,
-             s_alpha1, RIJ, R2IJ, RHOIJ, d_dt_cfl, d_h, d_dndh, d_n,
-             d_drhosumdh, s_h, s_dndh, s_n, s_drhosumdh, DWIJ, d_e, s_e,
-             d_dpsumdh, s_dpsumdh):
+             d_au, d_av, d_aw, d_ae, XIJ, VIJ, DWI, DWJ, HIJ, d_alpha,
+             s_alpha, RIJ, R2IJ, RHOIJ, d_h, d_dndh, d_n, s_h, s_dndh, s_n,
+             d_e, s_e, d_dpsumdh, s_dpsumdh):
 
         dim = self.dim
         gammam1 = self.gammam1
         avi = declare("matrix(3)")
-
-        # particle pressure
-        p_i = d_p[d_idx]
-        pj = s_p[s_idx]
-
-        # p_i/rhoi**2
-        rhoi2 = d_rho[d_idx] * d_rho[d_idx]
-        pibrhoi2 = p_i / rhoi2
-
-        # pj/rhoj**2
-        rhoj2 = s_rho[s_idx] * s_rho[s_idx]
-        pjbrhoj2 = pj / rhoj2
 
         # averaged sound speed
         cij = 0.5 * (d_cs[d_idx] + s_cs[s_idx])
@@ -383,14 +369,13 @@ class MomentumAndEnergy(Equation):
 
         if RIJ < 1e-8:
             vs = 2 * cij
-            # scalar part of the kernel gradient DWIJ
-            Fij = 0.0
         else:
             vs = 2 * cij - 3 * vijdotxij / RIJ
-            # scalar part of the kernel gradient DWIJ
-            Fij = 0.5 * (XIJ[0] * (DWI[0] + DWJ[0]) +
-                         XIJ[1] * (DWI[1] + DWJ[1]) +
-                         XIJ[2] * (DWI[2] + DWJ[2]))
+
+        # scalar part of the kernel gradient
+        Fij = 0.5 * (XIJ[0] * (DWI[0] + DWJ[0]) +
+                     XIJ[1] * (DWI[1] + DWJ[1]) +
+                     XIJ[2] * (DWI[2] + DWJ[2]))
 
         # Is this really reqd?
         # # compute the Courant-limited time step factor.
@@ -398,10 +383,10 @@ class MomentumAndEnergy(Equation):
 
         # Artificial viscosity
         if vijdotxij <= 0.0:
-            alpha1 = 0.5 * (d_alpha1[d_idx] + s_alpha1[s_idx])
+            alphaij = 0.5 * (d_alpha[d_idx] + s_alpha[s_idx])
             muij = hij * vijdotxij / (R2IJ + 0.0001 * hij ** 2)
             twrhoij = (2 * RHOIJ)
-            common = alpha1 * muij * (cij - self.betab * muij) * mj / twrhoij
+            common = alphaij * muij * (cij - self.betab * muij) * mj / twrhoij
 
             avi[0] = common * (DWI[0] + DWJ[0])
             avi[1] = common * (DWI[1] + DWJ[1])
@@ -420,7 +405,7 @@ class MomentumAndEnergy(Equation):
             # artificial conductivity
             eij = d_e[d_idx] - s_e[s_idx]
             Lij = abs(d_p[d_idx] - s_p[s_idx]) / (d_p[d_idx] + s_p[s_idx])
-            d_ae[d_idx] += (self.alphac * mj * alpha1 * vs * eij * Lij * Fij
+            d_ae[d_idx] += (self.alphac * mj * alphaij * vs * eij * Lij * Fij
                             / twrhoij)
 
         # grad-h correction terms.
@@ -433,7 +418,7 @@ class MomentumAndEnergy(Equation):
         hjbynjdim = s_h[s_idx] / (s_n[s_idx] * dim)
         inbrktj = 1 + s_dndh[s_idx] * hjbynjdim
         inprthsj = s_dpsumdh[s_idx] * hjbynjdim / (
-                self.gammam1 * d_m[d_idx] * s_e[s_idx])
+                gammam1 * d_m[d_idx] * s_e[s_idx])
         fji = 1 - inprthsj / inbrktj
 
         # accelerations for velocity
