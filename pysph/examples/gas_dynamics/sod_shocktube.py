@@ -118,8 +118,7 @@ class SodShockTube(ShockTubeSetup):
 
         psph = PSPHScheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            kernel_factor=None, alpha1=1.0, betab=2.0, update_alpha2=False,
-            alphaav=1.0
+            kernel_factor=None, betab=2.0
         )
 
         s = SchemeChooser(
