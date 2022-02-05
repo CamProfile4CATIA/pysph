@@ -1,4 +1,4 @@
-from pysph.sph.scheme import Scheme, add_bool_argument
+from pysph.sph.scheme import Scheme
 
 
 class PSPHScheme(Scheme):
@@ -22,7 +22,7 @@ class PSPHScheme(Scheme):
         self.has_ghosts = has_ghosts
         self.fkern = fkern
         self.alphaav = alphaav
-        self.alphac=alphac
+        self.alphac = alphac
 
     def add_user_options(self, group):
 
@@ -86,8 +86,6 @@ class PSPHScheme(Scheme):
     def get_equations(self):
         from pysph.sph.equation import Group
         from pysph.sph.gas_dynamics.basic import (MPMUpdateGhostProps)
-        from pysph.sph.gas_dynamics.tsph.equations import (
-            MorrisMonaghanSwitch)
         from pysph.sph.gas_dynamics.psph.equations import (
             PSPHSummationDensityAndPressure, GradientKinsfolkC1,
             SignalVelocity, LimiterAndAlphas, MomentumAndEnergy)
@@ -111,38 +109,30 @@ class PSPHScheme(Scheme):
                 max_iterations=self.max_density_iterations
             ))
 
-        g5 = []
+        g2 = []
         for fluid in self.fluids:
-            g5.append(GradientKinsfolkC1(
+            g2.append(GradientKinsfolkC1(
                 dest=fluid,
                 sources=self.fluids + self.solids,
                 dim=self.dim))
 
-            g5.append(SignalVelocity(
+            g2.append(SignalVelocity(
                 dest=fluid,
                 sources=self.fluids + self.solids,
             ))
-
-            g5.append(MorrisMonaghanSwitch(
-                dest=fluid,
-                sources=None,
-                alpha1_min=self.alpha1,
-                sigma=0.1
-            ))
-        equations.append(Group(equations=g5))
-
-        g2 = []
-        for fluid in self.fluids:
-            g2.append(LimiterAndAlphas(
-                dest=fluid,
-                sources=self.fluids))
         equations.append(Group(equations=g2))
 
-
         g3 = []
-        for solid in self.solids:
-            g3.append(WallBoundary(solid, sources=self.fluids))
+        for fluid in self.fluids:
+            g3.append(LimiterAndAlphas(
+                dest=fluid,
+                sources=self.fluids))
         equations.append(Group(equations=g3))
+
+        g4 = []
+        for solid in self.solids:
+            g4.append(WallBoundary(solid, sources=self.fluids))
+        equations.append(Group(equations=g4))
 
         if self.has_ghosts:
             gh = []
@@ -152,9 +142,9 @@ class PSPHScheme(Scheme):
                 )
             equations.append(Group(equations=gh, real=False))
 
-        g4 = []
+        g5 = []
         for fluid in self.fluids:
-            g4.append(MomentumAndEnergy(
+            g5.append(MomentumAndEnergy(
                 dest=fluid, sources=self.fluids + self.solids,
                 dim=self.dim,
                 betab=self.betab,
@@ -163,7 +153,7 @@ class PSPHScheme(Scheme):
                 gamma=self.gamma
             ))
 
-        equations.append(Group(equations=g4))
+        equations.append(Group(equations=g5))
 
         return equations
 
@@ -172,12 +162,13 @@ class PSPHScheme(Scheme):
         particle_arrays = dict([(p.name, p) for p in particles])
 
         props = ['rho', 'm', 'x', 'y', 'z', 'u', 'v', 'w', 'h', 'cs', 'p', 'e',
-                 'au', 'av', 'aw', 'ae', 'pid', 'gid', 'tag', 'dwdh', 'alpha1',
-                 'aalpha1', 'alpha10', 'h0', 'converged', 'ah', 'arho',
-                 'dt_cfl', 'e0', 'rho0', 'u0', 'v0', 'w0', 'x0', 'y0', 'z0']
+                 'au', 'av', 'aw', 'ae', 'pid', 'gid', 'tag', 'dwdh', 'h0',
+                 'converged', 'ah', 'arho', 'e0', 'rho0', 'u0', 'v0', 'w0',
+                 'x0', 'y0', 'z0']
         more_props = ['drhosumdh', 'n', 'dndh', 'prevn', 'prevdndh',
                       'prevdrhosumdh', 'divv', 'dpsumdh', 'dprevpsumdh', 'an',
-                      'adivv', 'trssdsst', 'vsig', 'alpha', 'alpha0', 'xi', "R"]
+                      'adivv', 'trssdsst', 'vsig', 'alpha', 'alpha0', 'xi',
+                      "R"]
         props.extend(more_props)
         output_props = []
         for fluid in self.fluids:

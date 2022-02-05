@@ -343,15 +343,16 @@ class MomentumAndEnergy(Equation):
         self.gammam1 = gamma - 1.0
         super().__init__(dest, sources)
 
-    def initialize(self, d_idx, d_au, d_av, d_aw, d_ae, d_dt_cfl):
+    def initialize(self, d_idx, d_au, d_av, d_aw, d_ae):
         d_au[d_idx] = 0.0
         d_av[d_idx] = 0.0
         d_aw[d_idx] = 0.0
         d_ae[d_idx] = 0.0
 
-        d_dt_cfl[d_idx] = 0.0
+        # Really required?
+        # d_dt_cfl[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, d_m, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
+    def loop(self, d_idx, s_idx, d_m, s_m, d_p, s_p, d_cs, s_cs,
              d_au, d_av, d_aw, d_ae, XIJ, VIJ, DWI, DWJ, HIJ, d_alpha,
              s_alpha, RIJ, R2IJ, RHOIJ, d_h, d_dndh, d_n, s_h, s_dndh, s_n,
              d_e, s_e, d_dpsumdh, s_dpsumdh):
