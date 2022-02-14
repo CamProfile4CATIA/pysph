@@ -311,23 +311,6 @@ class MomentumAndEnergy(Equation):
         hij = self.fkern * HIJ
         vijdotxij = (VIJ[0] * XIJ[0] + VIJ[1] * XIJ[1] + VIJ[2] * XIJ[2])
 
-        # # normalized interaction vector
-        # if RIJ < 1e-8:
-        #     XIJ[0] = 0.0
-        #     XIJ[1] = 0.0
-        #     XIJ[2] = 0.0
-        # else:
-        #     XIJ[0] /= RIJ
-        #     XIJ[1] /= RIJ
-        #     XIJ[2] /= RIJ
-        #
-        # Is this really reqd?
-        # # v_{ij} \cdot r_{ij} or vijdotxij
-        # dot = VIJ[0] * XIJ[0] + VIJ[1] * XIJ[1] + VIJ[2] * XIJ[2]
-        #
-        # # compute the Courant-limited time step factor.
-        # d_dt_cfl[d_idx] = max(d_dt_cfl[d_idx], cij + self.beta * dot)
-
         # Artificial viscosity
         if vijdotxij <= 0.0:
             # viscosity
