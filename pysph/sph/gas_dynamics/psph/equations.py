@@ -452,18 +452,13 @@ class MomentumAndEnergy(Equation):
         if RIJ < 1e-8:
             vs = 2 * cij
             muij = 0.0
+            Fij = 0.0
         else:
             vs = 2 * cij - 3 * vijdotxij / RIJ
             muij = vijdotxij / RIJ
-
-        # scalar part of the kernel gradient
-        Fij = 0.5 * (XIJ[0] * (DWI[0] + DWJ[0]) +
-                     XIJ[1] * (DWI[1] + DWJ[1]) +
-                     XIJ[2] * (DWI[2] + DWJ[2]))
-
-        # Is this really reqd?
-        # # compute the Courant-limited time step factor.
-        # d_dt_cfl[d_idx] = max(d_dt_cfl[d_idx], cij + self.beta * dot)
+            Fij = 0.5 * (XIJ[0] * (DWI[0] + DWJ[0]) +
+                         XIJ[1] * (DWI[1] + DWJ[1]) +
+                         XIJ[2] * (DWI[2] + DWJ[2])) / RIJ
 
         # Artificial viscosity
         if vijdotxij <= 0.0:
