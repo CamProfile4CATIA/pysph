@@ -13,8 +13,8 @@ from pysph.solver.application import Application
 
 from pysph.sph.scheme import GasDScheme, ADKEScheme, GSPHScheme, SchemeChooser
 from pysph.sph.wc.crksph import CRKSPHScheme
-from pysph.sph.gas_dynamics.psph.scheme import PSPHScheme
-from pysph.sph.gas_dynamics.tsph.scheme import TSPHScheme
+from pysph.sph.gas_dynamics.psph import PSPHScheme
+from pysph.sph.gas_dynamics.tsph import TSPHScheme
 
 # PySPH tools
 from pysph.tools import uniform_distribution as ud
@@ -28,13 +28,11 @@ gamma1 = gamma - 1.0
 dt = 5e-3
 tf = 1.
 
-
 # domain size
 xmin = 0.
 xmax = 1.
 ymin = 0.
 ymax = 1.
-
 
 # scheme constants
 alpha1 = 1.0
@@ -60,10 +58,9 @@ class AccuracyTest2D(Application):
         self.cfl = 0.1
 
     def add_user_options(self, group):
-        group.add_argument(
-            "--nparticles", action="store", type=int, dest="nprt", default=256,
-            help="Number of particles in domain"
-        )
+        group.add_argument("-n", "--n-particles", action="store", type=int,
+                           dest="nprt", default=256,
+                           help="Number of particles in domain")
 
     def consume_user_options(self):
         self.nx = self.options.nprt
@@ -80,7 +77,7 @@ class AccuracyTest2D(Application):
         global dx
         data = ud.uniform_distribution_cubic2D(
             self.dx, xmin, xmax, ymin, ymax
-            )
+        )
 
         x = data[0].ravel()
         y = data[1].ravel()
@@ -105,7 +102,7 @@ class AccuracyTest2D(Application):
         v = numpy.ones_like(x) * self.v
 
         # thermal energy from the ideal gas EOS
-        e = p/(gamma1*rho)
+        e = p / (gamma1 * rho)
 
         fluid = gpa(name='fluid', x=x, y=y, rho=rho, p=p, e=e, h=h, m=m,
                     h0=h.copy(), u=u, v=v)

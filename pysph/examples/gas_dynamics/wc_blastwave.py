@@ -6,8 +6,8 @@ results after they interact
 from pysph.sph.scheme import (
     GSPHScheme, SchemeChooser, ADKEScheme, GasDScheme
 )
-from pysph.sph.gas_dynamics.psph.scheme import PSPHScheme
-from pysph.sph.gas_dynamics.tsph.scheme import TSPHScheme
+from pysph.sph.gas_dynamics.psph import PSPHScheme
+from pysph.sph.gas_dynamics.tsph import TSPHScheme
 from pysph.sph.wc.crksph import CRKSPHScheme
 from pysph.base.utils import get_particle_array as gpa
 from pysph.base.nnps import DomainManager
@@ -44,7 +44,7 @@ class WCBlastwave(Application):
             dest="hdx", default=1.5,
             help="Ratio h/dx."
         )
-        group.add_argument("--nparticles", action="store", type=float,
+        group.add_argument("-n", "--n-particles", action="store", type=float,
                            dest="nprt", default=1000,
                            help="Number of particles")
 
