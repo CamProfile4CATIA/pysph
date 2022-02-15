@@ -387,8 +387,6 @@ class PSPHSummationDensityAndPressure(Equation):
                 # check for convergence
                 diff = abs(hnew - hi) / hi0
 
-                # if not ((diff < self.htol) and (fi > 0) or
-                #         self.iterate_only_once):
                 if not ((diff < self.htol) or self.iterate_only_once):
                     # this particle hasn't converged. This means the
                     # entire group must be repeated until this fellow
