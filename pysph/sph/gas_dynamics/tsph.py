@@ -26,7 +26,7 @@ GHOST_TAG = get_ghost_tag()
 
 class TSPHScheme(Scheme):
     def __init__(self, fluids, solids, dim, gamma, hfact, beta=2.0, fkern=1.0,
-                 max_density_iterations=250, alphaav=1.0,
+                 max_density_iterations=250, alphamax=1.0,
                  density_iteration_tolerance=1e-3, has_ghosts=False):
         """
         Density-energy formulation [Hopkins2013]_ including Balsara's
@@ -82,7 +82,7 @@ class TSPHScheme(Scheme):
         has_ghosts : bool, optional
             if ghost particles (either mirror or periodic) is used, by default
             False
-        alphaav : float, optional
+        alphamax : float, optional
             :math:`\\alpha_{av}` for artificial viscosity switch, by default
             1.0
         """
@@ -98,23 +98,23 @@ class TSPHScheme(Scheme):
         self.max_density_iterations = max_density_iterations
         self.has_ghosts = has_ghosts
         self.fkern = fkern
-        self.alphaav = alphaav
+        self.alphamax = alphamax
 
     def add_user_options(self, group):
-        group.add_argument("--alphaav", action="store", type=float,
-                           dest="alphaav", default=None,
-                           help="alpha_av for the artificial viscosity "
+        group.add_argument("--alpha-max", action="store", type=float,
+                           dest="alphamax", default=None,
+                           help="alpha_max for the artificial viscosity "
                                 "switch.")
 
         group.add_argument("--beta", action="store", type=float, dest="beta",
                            default=None,
-                           help="Beta for the artificial viscosity.")
+                           help="beta for the artificial viscosity.")
 
         group.add_argument("--gamma", action="store", type=float, dest="gamma",
-                           default=None, help="Gamma for the state equation.")
+                           default=None, help="gamma for the state equation.")
 
     def consume_user_options(self, options):
-        vars = ['gamma', 'alphaav', 'beta']
+        vars = ['gamma', 'alphamax', 'beta']
         data = dict((var, self._smart_getattr(options, var)) for var in vars)
         self.configure(**data)
 
@@ -175,7 +175,7 @@ class TSPHScheme(Scheme):
             g3.append(VelocityGradDivC1(dest=fluid, sources=all_pa,
                                         dim=self.dim))
             g3.append(BalsaraSwitch(dest=fluid, sources=None,
-                                    alphaav=self.alphaav, fkern=self.fkern))
+                                    alphaav=self.alphamax, fkern=self.fkern))
         equations.append(Group(equations=g3))
 
         g4 = []
