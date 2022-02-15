@@ -121,40 +121,40 @@ class PSPHScheme(Scheme):
         self.betaxi = betaxi
 
     def add_user_options(self, group):
-        group.add_argument("--alphamax", action="store", type=float,
+        group.add_argument("--alpha-max", action="store", type=float,
                            dest="alphamax", default=None,
                            help="alpha_max for artificial viscosity switch. ")
 
-        group.add_argument("--alphamin", action="store", type=float,
+        group.add_argument("--alpha-min", action="store", type=float,
                            dest="alphamin", default=None,
                            help="alpha_min for artificial viscosity switch. ")
 
-        group.add_argument("--betab", action="store", type=float, dest="betab",
-                           default=None,
+        group.add_argument("--beta-b", action="store", type=float,
+                           dest="betab", default=None,
                            help="beta for the artificial viscosity.")
 
-        group.add_argument("--betaxi", action="store", type=float,
+        group.add_argument("--beta-xi", action="store", type=float,
                            dest="betaxi", default=None,
                            help="beta_xi for artificial viscosity switch.")
 
-        group.add_argument("--betad", action="store", type=float, dest="betad",
-                           default=None,
+        group.add_argument("--beta-d", action="store", type=float,
+                           dest="betad", default=None,
                            help="beta_d for artificial viscosity switch.")
 
-        group.add_argument("--betac", action="store", type=float, dest="betac",
-                           default=None,
+        group.add_argument("--beta-c", action="store", type=float,
+                           dest="betac", default=None,
                            help="beta_c for artificial viscosity switch.")
 
-        group.add_argument("--alphac", action="store", type=float,
+        group.add_argument("--alpha-c", action="store", type=float,
                            dest="alphac", default=None,
                            help="alpha_c for artificial conductivity. ")
 
         group.add_argument("--gamma", action="store", type=float, dest="gamma",
-                           default=None, help="Gamma for the state equation.")
+                           default=None, help="gamma for the state equation.")
 
     def consume_user_options(self, options):
-        vars = 'gamma alphamax alphamin alphac betab betaxi betad ' \
-               'betac'.split(' ')
+        vars = ['gamma', 'alphamax', 'alphamin', 'alphac', 'betab', 'betaxi',
+                'betad', 'betac']
         data = dict((var, self._smart_getattr(options, var)) for var in vars)
         self.configure(**data)
 
