@@ -44,7 +44,7 @@ class WCBlastwave(Application):
             dest="hdx", default=1.5,
             help="Ratio h/dx."
         )
-        group.add_argument("--nparticles", action="store", type=float,
+        group.add_argument("-n", "--n-particles", action="store", type=float,
                            dest="nprt", default=1000,
                            help="Number of particles")
 

@@ -14,7 +14,6 @@ where :math:`\lambda` is the domain length.
         \rho_0 = \gamma = 1.4 and p_0 = 1.0
 """
 
-
 # standard library and numpy imports
 import numpy
 
@@ -53,10 +52,9 @@ class AcousticWave(Application):
         )
 
     def add_user_options(self, group):
-        group.add_argument(
-            "--nparticles", action="store", type=int, dest="nprt", default=256,
-            help="Number of particles in domain"
-        )
+        group.add_argument("-n", "--n-particles", action="store", type=int,
+                           dest="nprt", default=256,
+                           help="Number of particles in domain")
 
     def consume_user_options(self):
         self.n_particles = self.options.nprt
@@ -65,15 +63,15 @@ class AcousticWave(Application):
 
     def create_particles(self):
         x = numpy.arange(
-            self.xmin + self.dx*0.5, self.xmax, self.dx
+            self.xmin + self.dx * 0.5, self.xmax, self.dx
         )
-        rho = self.rho_0 + self.delta_rho *\
-            numpy.sin(self.k * x)
+        rho = self.rho_0 + self.delta_rho * \
+              numpy.sin(self.k * x)
 
-        p = self.p_0 + self.c_0**2 *\
+        p = self.p_0 + self.c_0 ** 2 * \
             self.delta_rho * numpy.sin(self.k * x)
 
-        u = self.c_0 * self.delta_rho * numpy.sin(self.k * x) /\
+        u = self.c_0 * self.delta_rho * numpy.sin(self.k * x) / \
             self.rho_0
         cs = numpy.sqrt(
             self.gamma * p / rho
@@ -166,7 +164,7 @@ class AcousticWave(Application):
         data = load(outfile)
         pa = data['arrays']['fluid']
         x_c = pa.x
-        u = self.c_0 * self.delta_rho * numpy.sin(self.k * x_c) /\
+        u = self.c_0 * self.delta_rho * numpy.sin(self.k * x_c) / \
             self.rho_0
         u_c = pa.u
         l_inf = numpy.max(
@@ -178,8 +176,8 @@ class AcousticWave(Application):
         print("L_inf norm of velocity for the problem: %s" % (l_inf))
         print("L_1 norm of velocity for the problem: %s" % (l_1))
 
-        rho = self.rho_0 + self.delta_rho *\
-            numpy.sin(self.k * x_c)
+        rho = self.rho_0 + self.delta_rho * \
+              numpy.sin(self.k * x_c)
 
         rho_c = pa.rho
         l1 = numpy.sum(
