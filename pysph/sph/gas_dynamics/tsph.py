@@ -464,29 +464,29 @@ class MomentumAndEnergy(Equation):
         energy sans artificial viscosity and artificial conductivity,
 
             .. math::
-                \frac{\mathrm{d} E}{\mathrm{~d} t}=\boldsymbol{v}_{i}
+                \frac{\mathrm{d} E_{i}}{\mathrm{~d} t}=\boldsymbol{v}_{i}
                 \cdot \frac{\mathrm{d} \boldsymbol{P}_{i}}{\mathrm{~d} t}-
                 \sum_{j} m_{i} m_{j}\left(\boldsymbol{v}_{i}-
                 \boldsymbol{v}_{j}\right) \cdot\left[\frac{P_{i}}
                 {\bar{\rho}_{i}^{2}} f_{i, j} \nabla_{i}
-                W_{i j}\left(h_{i}\right)\right]
+                W_{i j}\left(h_{i}\right)\right],
 
-           it should have been,
+        it should have been,
 
             .. math::
-                \frac{\mathrm{d} E}{\mathrm{~d} t}=\boldsymbol{v}_{i}
+                \frac{\mathrm{d} E_{i}}{\mathrm{~d} t}=\boldsymbol{v}_{i}
                 \cdot \frac{\mathrm{d} \boldsymbol{P}_{i}}{\mathrm{~d} t}+
                 \sum_{j} m_{i} m_{j}\left(\boldsymbol{v}_{i}-
                 \boldsymbol{v}_{j}\right) \cdot\left[\frac{P_{i}}
                 {\bar{\rho}_{i}^{2}} f_{i, j} \nabla_{i}
-                W_{i j}\left(h_{i}\right)\right]
+                W_{i j}\left(h_{i}\right)\right].
 
-           Specific thermal energy, :math:`u`, would therefore be evolved
-           using,
+        Specific thermal energy, :math:`u`, would therefore be evolved
+        using,
 
             .. math::
-                \frac{\mathrm{d} E}{\mathrm{~d} t}=
-                \sum_{j} m_{i} m_{j}\left(\boldsymbol{v}_{i}-
+                \frac{\mathrm{d} u_{i}}{\mathrm{~d} t}=
+                \sum_{j} m_{j}\left(\boldsymbol{v}_{i}-
                 \boldsymbol{v}_{j}\right) \cdot\left[\frac{P_{i}}
                 {\bar{\rho}_{i}^{2}} f_{i, j} \nabla_{i}
                 W_{i j}\left(h_{i}\right)\right]

@@ -640,7 +640,7 @@ class MomentumAndEnergy(Equation):
                     \sum_{j=1}^{N}(\gamma-1)^{2} m_{i} m_{j} u_{i} u_{j}
                     \frac{f_{i j}}{\bar{P}_{i}}\left(\boldsymbol{v}_{i}-
                     \boldsymbol{v}_{j}\right) \cdot \nabla_{i} W_{i j}
-                    \left(h_{i}\right)
+                    \left(h_{i}\right),
 
                it should have been,
 
@@ -662,9 +662,9 @@ class MomentumAndEnergy(Equation):
                     \boldsymbol{v}_{j}\right) \cdot \nabla_{i} W_{i j}
                     \left(h_{i}\right).
 
-            #. Instead of Equation F18 [Hopkins2015]_ for contribution of
+            #. Equation F18 [Hopkins2015]_ for contribution of
                artificial viscosity to the evolution of total
-               energy,
+               energy is,
 
                 .. math::
                     \frac{\mathrm{d} E_{i}}{\mathrm{~d} t}= \alpha_{\mathrm{C}}
@@ -672,16 +672,17 @@ class MomentumAndEnergy(Equation):
                     u_{j}\right) \times \frac{\left|P_{i}-P_{j}\right|}{P_{i}+
                     P_{j}} \frac{\nabla_{i} W_{i j}\left(h_{i}\right)+
                     \nabla_{i} W_{i j}\left(h_{j}\right)}{\bar{\rho}_{i}+
-                    \bar{\rho}_{j}} ,
+                    \bar{\rho}_{j}} .
 
-               carefully comparing with [ReadHayfield2012]_ and [KP14]_,
-               it should have been,
+               Carefully comparing with [ReadHayfield2012]_ and [KP14]_,
+               specific thermal energy, :math:`u`, should be evolved
+               using,
 
                 .. math::
                     \frac{\mathrm{d} u_{i}}{\mathrm{~d} t}= \alpha_{\mathrm{C}}
-                    \sum_{j} m_{i} m_{j} \alpha_{i j} \tilde{v}_{s}\left(u_{i}-
+                    \sum_{j} & m_{j} \alpha_{i j} \tilde{v}_{s}\left(u_{i}-
                     u_{j}\right) \frac{\left|P_{i}-P_{j}\right|}{P_{i}+
-                    P_{j}} \frac{\nabla_{i} W_{i j}\left(h_{i}\right)+
+                    P_{j}} \\ & \frac{\nabla_{i} W_{i j}\left(h_{i}\right)+
                     \nabla_{i} W_{i j}\left(h_{j}\right)}{\bar{\rho}_{i}+
                     \bar{\rho}_{j}} \cdot \frac{\left(\boldsymbol{x}_{i}-
                     \boldsymbol{x}_{j}\right)}{\left|\boldsymbol{x}_{i}-
