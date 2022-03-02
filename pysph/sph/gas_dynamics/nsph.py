@@ -18,7 +18,8 @@ from pysph.base.particle_array import get_ghost_tag
 from pysph.sph.equation import Equation
 from pysph.sph.integrator_step import IntegratorStep
 from pysph.sph.scheme import Scheme
-from pysph.sph.wc.linalg import augmented_matrix, gj_solve, identity, mat_mult
+from pysph.sph.wc.linalg import (augmented_matrix, gj_solve, identity,
+                                 mat_mult, mat_vec_mult)
 
 GHOST_TAG = get_ghost_tag()
 
@@ -177,6 +178,12 @@ class NSPHScheme(Scheme):
                                     alphaav=self.alphamax, fkern=self.fkern))
         equations.append(Group(equations=g3))
 
+        g3p1 = []
+        for fluid in self.fluids:
+            g3p1.append(CorrectionMatrix(dest=fluid, sources=all_pa,
+                                         dim=self.dim))
+        equations.append(Group(equations=g3p1))
+
         g4 = []
         for solid in self.solids:
             g4.append(WallBoundary(solid, sources=self.fluids))
@@ -217,6 +224,7 @@ class NSPHScheme(Scheme):
             pa.add_property('n', data=pa.rho / pa.m)
             pa.add_property('gradv', stride=9)
             pa.add_property('invtt', stride=9)
+            pa.add_property('cm', stride=9)
             nfp = pa.get_number_of_particles()
             pa.orig_idx[:] = numpy.arange(nfp)
             pa.set_output_arrays(output_props)
@@ -453,7 +461,70 @@ class BalsaraSwitch(Equation):
                 absdivv + abscurlv + 0.0001 * d_cs[d_idx] / fhi)
 
 
+class CorrectionMatrix(Equation):
+    def __init__(self, dest, sources, dim):
+        self.dim = dim
+        super().__init__(dest, sources)
+
+    def initialize(self, d_cm, d_idx):
+        dsi, i = declare('int', 2)
+        dsi = 9 * d_idx
+        for i in range(9):
+            d_cm[dsi + i] = 0.0
+
+    def loop(self, d_idx, d_invtt, s_m, s_idx, VIJ, DWI, XIJ, d_gradv,
+             s_rho, d_cm, WI):
+        dsi, ri, ci, drci, dim = declare('int', 5)
+        # dsi = start index in destination particle array
+        # r, c = row, column
+        # rc = row_index * no_of_cols + col_index
+        # drc = dsi + rc
+        #
+        # BASICALLY,
+        # Ends with i => index
+        # Starts with d or s => for indexing of destination or source
+        #                       particle array
+        # Doesn't start with d or s => for indexing flattened array created
+        #                              in this method itself using declare()
+
+        dim = self.dim
+        dsi = d_idx * 9
+        mbbyrhob = s_m[s_idx] / s_rho[s_idx]
+        for ri in range(dim):
+            for ci in range(dim):
+                drci = dsi + ri * 3 + ci
+                d_cm[drci] += mbbyrhob * XIJ[ri] * XIJ[ci] * WI
+
+    def post_loop(self, d_idx, d_gradv, d_invtt, d_divv, d_cm):
+        invcm, cm, idmat = declare('matrix(9)', 3)
+        augcm = declare('matrix(18)')
+        dsi, ri, ci, rc, drci, dim = declare('int', 6)
+
+        dim = self.dim
+        dsi = 9 * d_idx
+        identity(invcm, 3)
+        identity(idmat, 3)
+
+        for ri in range(dim):
+            for ci in range(dim):
+                rc = ri * 3 + ci
+                drci = dsi + rc
+                invcm[rc] = d_cm[drci]
+
+            augmented_matrix(invcm, idmat, 3, 3, 3, augcm)
+            gj_solve(augcm, 3, 3, cm)
+
+            for ri in range(3):
+                for ci in range(3):
+                    rc = ri * 3 + ci
+                    drci = dsi + rc
+                    d_cm[drci] = cm[rc]
+
+
 class MomentumAndEnergy(Equation):
+    def _get_helpers_(self):
+        return [mat_vec_mult]
+
     def __init__(self, dest, sources, dim, fkern, beta=2.0):
         r"""
         TSPH Momentum and Energy Equations with artificial viscosity.
@@ -505,11 +576,10 @@ class MomentumAndEnergy(Equation):
         # d_dt_cfl[d_idx] = 0.0
 
     def loop(self, d_idx, s_idx, d_m, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
-             d_au, d_av, d_aw, d_ae, XIJ, VIJ, DWI, DWJ, HIJ, d_alpha, s_alpha,
+             d_au, d_av, d_aw, d_ae, XIJ, VIJ, HIJ, d_alpha, s_alpha,
              R2IJ, RHOIJ1, d_h, d_dndh, d_n, d_drhosumdh, s_h, s_dndh, s_n,
-             s_drhosumdh):
+             s_drhosumdh, d_cm, s_cm, WI, WJ):
         avi = declare("matrix(3)")
-        dim = self.dim
 
         # particle pressure
         p_i = d_p[d_idx]
@@ -526,6 +596,29 @@ class MomentumAndEnergy(Equation):
         # averaged sound speed
         cij = 0.5 * (d_cs[d_idx] + s_cs[s_idx])
 
+        scm, dcm, idmat = declare('matrix(9)', 3)
+        gmi, gmj, xji = declare('matrix(3)', 3)
+        dsi, ssi, ri, ci, rci, drci, srci, dim = declare('int', 8)
+        dim = self.dim
+
+        dsi = 9 * d_idx
+        ssi = 9 * s_idx
+
+        for ri in range(dim):
+            for ci in range(dim):
+                rci = ri * 3 + ci
+                drci = dsi + rci
+                srci = ssi + rci
+                dcm[rci] = d_cm[drci] * WI
+                scm[rci] = s_cm[srci] * WJ
+
+
+        for ri in range(3):
+            xji[ri] = -XIJ[ri]
+
+        mat_vec_mult(dcm, xji, 3, gmi)
+        mat_vec_mult(scm, xji, 3, gmj)
+
         mj = s_m[s_idx]
         hij = self.fkern * HIJ
         vijdotxij = (VIJ[0] * XIJ[0] + VIJ[1] * XIJ[1] + VIJ[2] * XIJ[2])
@@ -537,9 +630,9 @@ class MomentumAndEnergy(Equation):
             muij = hij * vijdotxij / (R2IJ + 0.0001 * hij * hij)
             common = alpha * muij * (cij - self.beta * muij) * mj * RHOIJ1 / 2
 
-            avi[0] = common * (DWI[0] + DWJ[0])
-            avi[1] = common * (DWI[1] + DWJ[1])
-            avi[2] = common * (DWI[2] + DWJ[2])
+            avi[0] = common * (gmi[0] + gmj[0])
+            avi[1] = common * (gmi[1] + gmj[1])
+            avi[2] = common * (gmi[2] + gmj[2])
 
             # viscous contribution to velocity
             d_au[d_idx] += avi[0]
@@ -551,27 +644,16 @@ class MomentumAndEnergy(Equation):
                                   VIJ[1] * avi[1] +
                                   VIJ[2] * avi[2])
 
-        # grad-h correction terms.
-        hibynidim = d_h[d_idx] / (d_n[d_idx] * dim)
-        inbrkti = 1 + d_dndh[d_idx] * hibynidim
-        inprthsi = d_drhosumdh[d_idx] * hibynidim
-        fij = 1 - inprthsi / (s_m[s_idx] * inbrkti)
-
-        hjbynjdim = s_h[s_idx] / (s_n[s_idx] * dim)
-        inbrktj = 1 + s_dndh[s_idx] * hjbynjdim
-        inprthsj = s_drhosumdh[s_idx] * hjbynjdim
-        fji = 1 - inprthsj / (d_m[d_idx] * inbrktj)
-
         # accelerations for velocity
-        comi = mj * pibrhoi2 * fij
-        comj = mj * pjbrhoj2 * fji
+        comi = mj * pibrhoi2
+        comj = mj * pjbrhoj2
 
-        d_au[d_idx] -= comi * DWI[0] + comj * DWJ[0]
-        d_av[d_idx] -= comi * DWI[1] + comj * DWJ[1]
-        d_aw[d_idx] -= comi * DWI[2] + comj * DWJ[2]
+        d_au[d_idx] -= comi * gmi[0] + comj * gmj[0]
+        d_av[d_idx] -= comi * gmi[1] + comj * gmj[1]
+        d_aw[d_idx] -= comi * gmi[2] + comj * gmj[2]
 
         # accelerations for the thermal energy
-        vijdotdwi = VIJ[0] * DWI[0] + VIJ[1] * DWI[1] + VIJ[2] * DWI[2]
+        vijdotdwi = VIJ[0] * gmi[0] + VIJ[1] * gmi[1] + VIJ[2] * gmi[2]
         d_ae[d_idx] += comi * vijdotdwi
 
 
