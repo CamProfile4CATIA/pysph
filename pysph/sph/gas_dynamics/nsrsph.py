@@ -519,14 +519,14 @@ class CorrectionMatrix(Equation):
                 drci = dsi + rc
                 invcm[rc] = d_cm[drci]
 
-            augmented_matrix(invcm, idmat, 3, 3, 3, augcm)
-            gj_solve(augcm, 3, 3, cm)
+        augmented_matrix(invcm, idmat, 3, 3, 3, augcm)
+        gj_solve(augcm, 3, 3, cm)
 
-            for ri in range(3):
-                for ci in range(3):
-                    rc = ri * 3 + ci
-                    drci = dsi + rc
-                    d_cm[drci] = cm[rc]
+        for ri in range(3):
+            for ci in range(3):
+                rc = ri * 3 + ci
+                drci = dsi + rc
+                d_cm[drci] = cm[rc]
 
 
 class MomentumAndEnergy(Equation):
@@ -612,19 +612,19 @@ class MomentumAndEnergy(Equation):
         dsi = 9 * d_idx
         ssi = 9 * s_idx
 
+        for ri in range(3):
+            gmi[ri] = 0
+            gmj[ri] = 0
+            avi[ri] = 0
+
+
         for ri in range(dim):
             for ci in range(dim):
                 rci = ri * 3 + ci
                 drci = dsi + rci
                 srci = ssi + rci
-                dcm[rci] = d_cm[drci] * WI
-                scm[rci] = s_cm[srci] * WJ
-
-        for ri in range(3):
-            xji[ri] = -XIJ[ri]
-
-        mat_vec_mult(dcm, xji, 3, gmi)
-        mat_vec_mult(scm, xji, 3, gmj)
+                gmi[ri] -= d_cm[drci] * XIJ[ri] * WI
+                gmj[ri] -= s_cm[srci] * XIJ[ri] * WJ
 
         mj = s_m[s_idx]
         hij = self.fkern * HIJ
@@ -652,16 +652,13 @@ class MomentumAndEnergy(Equation):
                                   VIJ[2] * avi[2])
 
         # accelerations for velocity
-        comi = mj * pibrhoi2
-        comj = mj * pjbrhoj2
-
-        d_au[d_idx] -= comi * gmi[0] + comj * gmj[0]
-        d_av[d_idx] -= comi * gmi[1] + comj * gmj[1]
-        d_aw[d_idx] -= comi * gmi[2] + comj * gmj[2]
+        d_au[d_idx] -= mj * (pibrhoi2 * gmi[0] + pjbrhoj2 * gmj[0])
+        d_av[d_idx] -= mj * (pibrhoi2 * gmi[1] + pjbrhoj2 * gmj[1])
+        d_aw[d_idx] -= mj * (pibrhoi2 * gmi[2] + pjbrhoj2 * gmj[2])
 
         # accelerations for the thermal energy
         vijdotdwi = VIJ[0] * gmi[0] + VIJ[1] * gmi[1] + VIJ[2] * gmi[2]
-        d_ae[d_idx] += comi * vijdotdwi
+        d_ae[d_idx] += mj * pibrhoi2 * vijdotdwi
 
 
 class WallBoundary(Equation):
