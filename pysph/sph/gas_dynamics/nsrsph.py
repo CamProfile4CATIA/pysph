@@ -1,15 +1,24 @@
 """
 References
 -----------
+    .. [Rosswog2009] Rosswog, Stephan. "Astrophysical smooth particle
+        hydrodynamics." New Astronomy Reviews 53, no. 4-6 (2009): 78-104.
 
-    .. [Rosswog2020a] Rosswog, S. “A Simple, Entropy-Based Dissipation Trigger
-        for SPH.” The Astrophysical Journal 898, no. 1 (July 23, 2020): 60.
+
+    .. [Rosswog2015] Rosswog, Stephan. "Boosting the accuracy of SPH
+        techniques: Newtonian and special-relativistic tests." Monthly
+        Notices of the Royal Astronomical Society 448, no. 4 (2015):
+        3628-3664. https://doi.org/10.1093/mnras/stv225.
+
+
+    .. [Rosswog2020a] Rosswog, Stephan. "A simple, entropy-based dissipation
+        trigger for SPH." The Astrophysical Journal 898, no. 1 (2020): 60.
         https://doi.org/10.3847/1538-4357/ab9a2e.
 
 
-    .. [Rosswog2020b] Rosswog, S. “The Lagrangian Hydrodynamics Code Magma2.”
-        Monthly Notices of the Royal Astronomical Society 498, no. 3
-        (September 24, 2020): 4230–55. https://doi.org/10.1093/mnras/staa2591.
+    .. [Rosswog2020b] Rosswog, Stephan. "The Lagrangian hydrodynamics code
+        MAGMA2." Monthly Notices of the Royal Astronomical Society 498, no. 3
+        (2020): 4230-4255. https://doi.org/10.1093/mnras/staa2591.
 
 """
 from compyle.types import declare
@@ -24,14 +33,18 @@ from pysph.sph.wc.linalg import (augmented_matrix, gj_solve, identity,
 GHOST_TAG = get_ghost_tag()
 
 
-class NSPHScheme(Scheme):
+class NSRSPHScheme(Scheme):
     def __init__(self, fluids, solids, dim, gamma, hfact, beta=2.0, fkern=1.0,
                  max_density_iterations=250, alphamax=1.0,
                  density_iteration_tolerance=1e-3, has_ghosts=False):
         """
-        Density-energy formulation [Hopkins2013]_ including Balsara's
-        artificial viscocity switch with modifications,
-        as presented in Appendix F1 of [Hopkins2015]_ .
+        Newtonian limit of Rosswog's special-relativistic SPH.
+
+        Derivation: [Rosswog2009]_
+        Improvements: [Rosswog2015]_
+        Limiter: [Rosswog2020a]_
+        Summary: [Rosswog2020b]_ (These equations are used in the
+        implementation here.)
 
         Notes
         -----
@@ -41,17 +54,10 @@ class NSPHScheme(Scheme):
         What is different then?
             #. Adapting smoothing length using MPM [KP14]_ procedure from
                :class:`SummationDensity
-               <pysph.sph.gas_dynamics.basic.SummationDensity>`. In this,
-               calculation of grad-h terms are changed to that specified for
-               this scheme.
-            #. Using the PEC integrator step. No individual
-               adaptive time-stepping.
-            #. Using :class:`Gaussian Kernel <pysph.base.kernels.Gaussian>`
-               by default instead of Cubic Spline with radius scale 1.
-
-        Tip: Reduce the number of points if particle penetration is
-        encountered. This has to be done while running
-        ``gas_dynamics.wc_blastwave`` and ``gas_dynamics.robert``.
+               <pysph.sph.gas_dynamics.basic.SummationDensity>`. From this, the
+               grad-h terms removed.
+            #. Using :class:`CubicSpline <pysph.base.kernels.CubicSpline>`
+               as default kernel.
 
         Parameters
         ----------
@@ -242,7 +248,7 @@ class SummationDensity(Equation):
         """
         :class:`SummationDensity
         <pysph.sph.gas_dynamics.basic.SummationDensity>` modified to use
-        number density for calculation of grad-h terms.
+         number density and without grad-h terms.
 
         Ref. Appendix F1 [Hopkins2015]_
         """
@@ -287,10 +293,12 @@ class SummationDensity(Equation):
         d_rho[d_idx] += mj * WI
 
         # density accelerations
-        hibynidim = d_h[d_idx] / (d_prevn[d_idx] * self.dim)
-        inbrkti = 1 + d_prevdndh[d_idx] * hibynidim
-        inprthsi = d_prevdrhosumdh[d_idx] * hibynidim
-        fij = 1 - inprthsi / (s_m[s_idx] * inbrkti)
+        # hibynidim = d_h[d_idx] / (d_prevn[d_idx] * self.dim)
+        # inbrkti = 1 + d_prevdndh[d_idx] * hibynidim
+        # inprthsi = d_prevdrhosumdh[d_idx] * hibynidim
+        # fij = 1 - inprthsi / (s_m[s_idx] * inbrkti)
+
+        fij = 1
         vijdotdwij_fij = vijdotdwij * fij
         d_arho[d_idx] += mj * vijdotdwij_fij
         d_an[d_idx] += vijdotdwij_fij
@@ -611,7 +619,6 @@ class MomentumAndEnergy(Equation):
                 srci = ssi + rci
                 dcm[rci] = d_cm[drci] * WI
                 scm[rci] = s_cm[srci] * WJ
-
 
         for ri in range(3):
             xji[ri] = -XIJ[ri]
