@@ -4,6 +4,7 @@ from pysph.examples.gas_dynamics.shocktube_setup import ShockTubeSetup
 from pysph.sph.scheme import ADKEScheme, GasDScheme, GSPHScheme, SchemeChooser
 from pysph.sph.gas_dynamics.psph import PSPHScheme
 from pysph.sph.gas_dynamics.tsph import TSPHScheme
+from pysph.sph.gas_dynamics.nsrsph import NSRSPHScheme
 from pysph.sph.wc.crksph import CRKSPHScheme
 from pysph.base.nnps import DomainManager
 
@@ -75,7 +76,7 @@ class SodShockTube(ShockTubeSetup):
         scheme = self.scheme
         if self.options.scheme in ['gsph', 'mpm']:
             scheme.configure(kernel_factor=self.hdx)
-        elif self.options.scheme in ['psph', 'tsph']:
+        elif self.options.scheme in ['psph', 'tsph', 'nsrsph']:
             scheme.configure(hfact=self.hdx)
         scheme.configure_solver(tf=self.tf, dt=self.dt)
 
@@ -110,9 +111,15 @@ class SodShockTube(ShockTubeSetup):
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
             hfact=None
         )
+
+        nsrsph = NSRSPHScheme(
+            fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
+            hfact=None
+        )
+
         s = SchemeChooser(
             default='adke', adke=adke, mpm=mpm, gsph=gsph, crk=crk, psph=psph,
-            tsph=tsph)
+            tsph=tsph, nsrsph=nsrsph)
         return s
 
 

@@ -203,7 +203,7 @@ class NSRSPHScheme(Scheme):
 
         g5 = []
         for fluid in self.fluids:
-            g5.append(MomentumAndEnergy(dest=fluid, sources=all_pa,
+            g5.append(MomentumAndEnergyMI1(dest=fluid, sources=all_pa,
                                         dim=self.dim, beta=self.beta,
                                         fkern=self.fkern))
         equations.append(Group(equations=g5))
@@ -386,22 +386,22 @@ class VelocityGradDivC1(Equation):
         return [augmented_matrix, gj_solve, identity, mat_mult]
 
     def initialize(self, d_gradv, d_idx, d_invtt, d_divv):
-        start_indx, i, dim = declare('int', 3)
-        start_indx = 9 * d_idx
+        dstart_indx, i, dim = declare('int', 3)
+        dstart_indx = 9 * d_idx
 
         for i in range(9):
-            d_gradv[start_indx + i] = 0.0
-            d_invtt[start_indx + i] = 0.0
+            d_gradv[dstart_indx + i] = 0.0
+            d_invtt[dstart_indx + i] = 0.0
 
         d_divv[d_idx] = 0.0
 
     def loop(self, d_idx, d_invtt, s_m, s_idx, VIJ, DWI, XIJ, d_gradv):
-        start_indx, row, col, drowcol, dim = declare('int', 5)
+        dstart_indx, row, col, drowcol, dim = declare('int', 5)
         dim = self.dim
-        start_indx = d_idx * 9
+        dstart_indx = d_idx * 9
         for row in range(dim):
             for col in range(dim):
-                drowcol = start_indx + row * 3 + col
+                drowcol = dstart_indx + row * 3 + col
                 d_invtt[drowcol] -= s_m[s_idx] * XIJ[row] * DWI[col]
                 d_gradv[drowcol] -= s_m[s_idx] * VIJ[row] * DWI[col]
 
@@ -409,23 +409,23 @@ class VelocityGradDivC1(Equation):
         tt, invtt, idmat, gradv = declare('matrix(9)', 4)
         augtt = declare('matrix(18)')
 
-        start_indx, row, col, rowcol, drowcol, dim = declare('int', 6)
+        dstart_indx, row, col, rowcol, drowcol, dim = declare('int', 6)
 
         dim = self.dim
-        start_indx = 9 * d_idx
+        dstart_indx = 9 * d_idx
         identity(idmat, 3)
         identity(tt, 3)
 
         for row in range(3):
             for col in range(3):
                 rowcol = row * 3 + col
-                drowcol = start_indx + rowcol
+                drowcol = dstart_indx + rowcol
                 gradv[rowcol] = d_gradv[drowcol]
 
         for row in range(dim):
             for col in range(dim):
                 rowcol = row * 3 + col
-                drowcol = start_indx + rowcol
+                drowcol = dstart_indx + rowcol
                 tt[rowcol] = d_invtt[drowcol]
 
         augmented_matrix(tt, idmat, 3, 3, 3, augtt)
@@ -437,7 +437,7 @@ class VelocityGradDivC1(Equation):
             d_divv[d_idx] += gradvls[row * 3 + row]
             for col in range(dim):
                 rowcol = row * 3 + col
-                drowcol = start_indx + rowcol
+                drowcol = dstart_indx + rowcol
                 d_gradv[drowcol] = gradvls[rowcol]
 
 
@@ -482,60 +482,49 @@ class CorrectionMatrix(Equation):
 
     def loop(self, d_idx, d_invtt, s_m, s_idx, VIJ, DWI, XIJ, d_gradv,
              s_rho, d_cm, WI):
-        dsi, ri, ci, drci, dim = declare('int', 5)
-        # dsi = start index in destination particle array
-        # r, c = row, column
-        # rc = row_index * no_of_cols + col_index
-        # drc = dsi + rc
-        #
-        # BASICALLY,
-        # Ends with i => index
-        # Starts with d or s => for indexing of destination or source
-        #                       particle array
-        # Doesn't start with d or s => for indexing flattened array created
-        #                              in this method itself using declare()
+        dstart_indx, row, col, drowcol, dim = declare('int', 5)
 
         dim = self.dim
-        dsi = d_idx * 9
+        dstart_indx = d_idx * 9
         mbbyrhob = s_m[s_idx] / s_rho[s_idx]
-        for ri in range(dim):
-            for ci in range(dim):
-                drci = dsi + ri * 3 + ci
-                d_cm[drci] += mbbyrhob * XIJ[ri] * XIJ[ci] * WI
+        for row in range(dim):
+            for col in range(dim):
+                drowcol = dstart_indx + row * 3 + col
+                d_cm[drowcol] += mbbyrhob * XIJ[row] * XIJ[col] * WI
 
     def post_loop(self, d_idx, d_gradv, d_invtt, d_divv, d_cm):
         invcm, cm, idmat = declare('matrix(9)', 3)
         augcm = declare('matrix(18)')
-        dsi, ri, ci, rc, drci, dim = declare('int', 6)
+        dstart_indx, row, col, rowcol, drowcol, dim = declare('int', 6)
 
         dim = self.dim
-        dsi = 9 * d_idx
+        dstart_indx = 9 * d_idx
         identity(invcm, 3)
         identity(idmat, 3)
 
-        for ri in range(dim):
-            for ci in range(dim):
-                rc = ri * 3 + ci
-                drci = dsi + rc
-                invcm[rc] = d_cm[drci]
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * 3 + col
+                drowcol = dstart_indx + rowcol
+                invcm[rowcol] = d_cm[drowcol]
 
         augmented_matrix(invcm, idmat, 3, 3, 3, augcm)
         gj_solve(augcm, 3, 3, cm)
 
-        for ri in range(3):
-            for ci in range(3):
-                rc = ri * 3 + ci
-                drci = dsi + rc
-                d_cm[drci] = cm[rc]
+        for row in range(3):
+            for col in range(3):
+                rowcol = row * 3 + col
+                drowcol = dstart_indx + rowcol
+                d_cm[drowcol] = cm[rowcol]
 
 
-class MomentumAndEnergy(Equation):
+class MomentumAndEnergyMI1(Equation):
     def _get_helpers_(self):
         return [mat_vec_mult]
 
     def __init__(self, dest, sources, dim, fkern, beta=2.0):
         r"""
-        TSPH Momentum and Energy Equations with artificial viscosity.
+        Momentum and Energy Equations with artificial viscosity.
 
         Possible typo in that has been taken care of:
 
@@ -589,42 +578,39 @@ class MomentumAndEnergy(Equation):
              s_drhosumdh, d_cm, s_cm, WI, WJ):
         avi = declare("matrix(3)")
 
-        # particle pressure
-        p_i = d_p[d_idx]
-        pj = s_p[s_idx]
-
         # p_i/rhoi**2
         rhoi2 = d_rho[d_idx] * d_rho[d_idx]
-        pibrhoi2 = p_i / rhoi2
+        pibrhoi2 = d_p[d_idx] / rhoi2
 
         # pj/rhoj**2
         rhoj2 = s_rho[s_idx] * s_rho[s_idx]
-        pjbrhoj2 = pj / rhoj2
+        pjbrhoj2 = s_p[s_idx] / rhoj2
 
         # averaged sound speed
         cij = 0.5 * (d_cs[d_idx] + s_cs[s_idx])
 
         scm, dcm, idmat = declare('matrix(9)', 3)
-        gmi, gmj, xji = declare('matrix(3)', 3)
-        dsi, ssi, ri, ci, rci, drci, srci, dim = declare('int', 8)
+        gmi, gmj = declare('matrix(3)', 2)
+        dstart_indx, sstart_indx, row, col = declare('int', 4)
+        rowcol, drowcol, srowcol, dim = declare('int', 4)
         dim = self.dim
 
-        dsi = 9 * d_idx
-        ssi = 9 * s_idx
+        dstart_indx = 9 * d_idx
+        sstart_indx = 9 * s_idx
 
-        for ri in range(3):
-            gmi[ri] = 0
-            gmj[ri] = 0
-            avi[ri] = 0
+        for row in range(3):
+            gmi[row] = 0
+            gmj[row] = 0
+            avi[row] = 0
 
 
-        for ri in range(dim):
-            for ci in range(dim):
-                rci = ri * 3 + ci
-                drci = dsi + rci
-                srci = ssi + rci
-                gmi[ri] -= d_cm[drci] * XIJ[ri] * WI
-                gmj[ri] -= s_cm[srci] * XIJ[ri] * WJ
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * 3 + col
+                drowcol = dstart_indx + rowcol
+                srowcol = sstart_indx + rowcol
+                gmi[row] -= d_cm[drowcol] * XIJ[row] * WI
+                gmj[row] -= s_cm[srowcol] * XIJ[row] * WJ
 
         mj = s_m[s_idx]
         hij = self.fkern * HIJ
