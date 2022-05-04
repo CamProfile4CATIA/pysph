@@ -386,22 +386,25 @@ class VelocityGradDivC1(Equation):
         return [augmented_matrix, gj_solve, identity, mat_mult]
 
     def initialize(self, d_gradv, d_idx, d_invtt, d_divv):
-        dstart_indx, i, dim = declare('int', 3)
-        dstart_indx = 9 * d_idx
+        dstart_indx, i, dim, dimsq = declare('int', 4)
+        dim = self.dim
+        dimsq = dim*dim
+        dstart_indx = dimsq * d_idx
 
-        for i in range(9):
+        for i in range(dimsq):
             d_gradv[dstart_indx + i] = 0.0
             d_invtt[dstart_indx + i] = 0.0
 
         d_divv[d_idx] = 0.0
 
     def loop(self, d_idx, d_invtt, s_m, s_idx, VIJ, DWI, XIJ, d_gradv):
-        dstart_indx, row, col, drowcol, dim = declare('int', 5)
+        dstart_indx, row, col, drowcol, dim, dimsq = declare('int', 6)
         dim = self.dim
-        dstart_indx = d_idx * 9
+        dimsq = dim*dim
+        dstart_indx = d_idx * dimsq
         for row in range(dim):
             for col in range(dim):
-                drowcol = dstart_indx + row * 3 + col
+                drowcol = dstart_indx + row * dim + col
                 d_invtt[drowcol] -= s_m[s_idx] * XIJ[row] * DWI[col]
                 d_gradv[drowcol] -= s_m[s_idx] * VIJ[row] * DWI[col]
 
@@ -409,34 +412,35 @@ class VelocityGradDivC1(Equation):
         tt, invtt, idmat, gradv = declare('matrix(9)', 4)
         augtt = declare('matrix(18)')
 
-        dstart_indx, row, col, rowcol, drowcol, dim = declare('int', 6)
+        dstart_indx, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
 
         dim = self.dim
-        dstart_indx = 9 * d_idx
-        identity(idmat, 3)
-        identity(tt, 3)
+        dimsq = dim*dim
+        dstart_indx = dimsq * d_idx
+        identity(idmat, dim)
+        identity(tt, dim)
 
-        for row in range(3):
-            for col in range(3):
-                rowcol = row * 3 + col
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * dim + col
                 drowcol = dstart_indx + rowcol
                 gradv[rowcol] = d_gradv[drowcol]
 
         for row in range(dim):
             for col in range(dim):
-                rowcol = row * 3 + col
+                rowcol = row * dim + col
                 drowcol = dstart_indx + rowcol
                 tt[rowcol] = d_invtt[drowcol]
 
-        augmented_matrix(tt, idmat, 3, 3, 3, augtt)
-        gj_solve(augtt, 3, 3, invtt)
+        augmented_matrix(tt, idmat, dim, dim, dim, augtt)
+        gj_solve(augtt, dim, dim, invtt)
         gradvls = declare('matrix(9)')
-        mat_mult(gradv, invtt, 3, gradvls)
+        mat_mult(gradv, invtt, dim, gradvls)
 
         for row in range(dim):
-            d_divv[d_idx] += gradvls[row * 3 + row]
+            d_divv[d_idx] += gradvls[row * dim + row]
             for col in range(dim):
-                rowcol = row * 3 + col
+                rowcol = row * dim + col
                 drowcol = dstart_indx + rowcol
                 d_gradv[drowcol] = gradvls[rowcol]
 
@@ -450,12 +454,10 @@ class BalsaraSwitch(Equation):
     def post_loop(self, d_h, d_idx, d_cs, d_divv, d_gradv, d_alpha):
         curlv = declare('matrix(3)')
 
-        curlv[0] = (d_gradv[9 * d_idx + 3 * 2 + 1] -
-                    d_gradv[9 * d_idx + 3 * 1 + 2])
-        curlv[1] = (d_gradv[9 * d_idx + 3 * 0 + 2] -
-                    d_gradv[9 * d_idx + 3 * 2 + 0])
-        curlv[2] = (d_gradv[9 * d_idx + 3 * 1 + 0] -
-                    d_gradv[9 * d_idx + 3 * 0 + 1])
+        curlv[0] = 0
+        curlv[1] = 0
+
+        curlv[2] = 0
 
         abscurlv = sqrt(curlv[0] * curlv[0] +
                         curlv[1] * curlv[1] +
@@ -609,8 +611,8 @@ class MomentumAndEnergyMI1(Equation):
                 rowcol = row * 3 + col
                 drowcol = dstart_indx + rowcol
                 srowcol = sstart_indx + rowcol
-                gmi[row] -= d_cm[drowcol] * XIJ[row] * WI
-                gmj[row] -= s_cm[srowcol] * XIJ[row] * WJ
+                gmi[row] -= d_cm[drowcol] * XIJ[col] * WI
+                gmj[row] -= s_cm[srowcol] * XIJ[col] * WJ
 
         mj = s_m[s_idx]
         hij = self.fkern * HIJ
