@@ -198,14 +198,15 @@ class NSRSPHScheme(Scheme):
         if self.has_ghosts:
             gh = []
             for fluid in self.fluids:
-                gh.append(UpdateGhostProps(dest=fluid, sources=None))
+                gh.append(UpdateGhostProps(dest=fluid, sources=None,
+                                           dim=self.dim))
             equations.append(Group(equations=gh, real=False))
 
         g5 = []
         for fluid in self.fluids:
             g5.append(MomentumAndEnergyMI1(dest=fluid, sources=all_pa,
-                                        dim=self.dim, beta=self.beta,
-                                        fkern=self.fkern))
+                                           dim=self.dim, beta=self.beta,
+                                           fkern=self.fkern))
         equations.append(Group(equations=g5))
 
         return equations
@@ -388,7 +389,7 @@ class VelocityGradDivC1(Equation):
     def initialize(self, d_gradv, d_idx, d_invtt, d_divv):
         dstart_indx, i, dim, dimsq = declare('int', 4)
         dim = self.dim
-        dimsq = dim*dim
+        dimsq = dim * dim
         dstart_indx = dimsq * d_idx
 
         for i in range(dimsq):
@@ -400,7 +401,7 @@ class VelocityGradDivC1(Equation):
     def loop(self, d_idx, d_invtt, s_m, s_idx, VIJ, DWI, XIJ, d_gradv):
         dstart_indx, row, col, drowcol, dim, dimsq = declare('int', 6)
         dim = self.dim
-        dimsq = dim*dim
+        dimsq = dim * dim
         dstart_indx = d_idx * dimsq
         for row in range(dim):
             for col in range(dim):
@@ -415,7 +416,7 @@ class VelocityGradDivC1(Equation):
         dstart_indx, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
 
         dim = self.dim
-        dimsq = dim*dim
+        dimsq = dim * dim
         dstart_indx = dimsq * d_idx
         identity(idmat, dim)
         identity(tt, dim)
@@ -474,48 +475,51 @@ class BalsaraSwitch(Equation):
 class CorrectionMatrix(Equation):
     def __init__(self, dest, sources, dim):
         self.dim = dim
+        self.dimsq = dim * dim
         super().__init__(dest, sources)
 
     def initialize(self, d_cm, d_idx):
-        dsi, i = declare('int', 2)
-        dsi = 9 * d_idx
-        for i in range(9):
+        dsi, i, dimsq = declare('int', 3)
+        dimsq = self.dimsq
+        dsi = dimsq * d_idx
+        for i in range(dimsq):
             d_cm[dsi + i] = 0.0
 
     def loop(self, d_idx, d_invtt, s_m, s_idx, VIJ, DWI, XIJ, d_gradv,
              s_rho, d_cm, WI):
-        dstart_indx, row, col, drowcol, dim = declare('int', 5)
-
+        dstart_indx, row, col, drowcol, dim, dimsq = declare('int', 6)
         dim = self.dim
-        dstart_indx = d_idx * 9
+        dimsq = self.dimsq
+        dstart_indx = d_idx * dimsq
         mbbyrhob = s_m[s_idx] / s_rho[s_idx]
         for row in range(dim):
             for col in range(dim):
-                drowcol = dstart_indx + row * 3 + col
+                drowcol = dstart_indx + row * dim + col
                 d_cm[drowcol] += mbbyrhob * XIJ[row] * XIJ[col] * WI
 
     def post_loop(self, d_idx, d_gradv, d_invtt, d_divv, d_cm):
         invcm, cm, idmat = declare('matrix(9)', 3)
         augcm = declare('matrix(18)')
-        dstart_indx, row, col, rowcol, drowcol, dim = declare('int', 6)
+        dstart_indx, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
 
         dim = self.dim
-        dstart_indx = 9 * d_idx
-        identity(invcm, 3)
-        identity(idmat, 3)
+        dimsq = self.dimsq
+        dstart_indx = dimsq * d_idx
+        identity(invcm, dim)
+        identity(idmat, dim)
 
         for row in range(dim):
             for col in range(dim):
-                rowcol = row * 3 + col
+                rowcol = row * dim + col
                 drowcol = dstart_indx + rowcol
                 invcm[rowcol] = d_cm[drowcol]
 
-        augmented_matrix(invcm, idmat, 3, 3, 3, augcm)
-        gj_solve(augcm, 3, 3, cm)
+        augmented_matrix(invcm, idmat, dim, dim, dim, augcm)
+        gj_solve(augcm, dim, dim, cm)
 
-        for row in range(3):
-            for col in range(3):
-                rowcol = row * 3 + col
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * dim + col
                 drowcol = dstart_indx + rowcol
                 d_cm[drowcol] = cm[rowcol]
 
@@ -564,6 +568,7 @@ class MomentumAndEnergyMI1(Equation):
         self.beta = beta
         self.dim = dim
         self.fkern = fkern
+        self.dimsq = dim * dim
         super().__init__(dest, sources)
 
     def initialize(self, d_idx, d_au, d_av, d_aw, d_ae):
@@ -594,21 +599,20 @@ class MomentumAndEnergyMI1(Equation):
         scm, dcm, idmat = declare('matrix(9)', 3)
         gmi, gmj = declare('matrix(3)', 2)
         dstart_indx, sstart_indx, row, col = declare('int', 4)
-        rowcol, drowcol, srowcol, dim = declare('int', 4)
+        rowcol, drowcol, srowcol, dim, dimsq = declare('int', 5)
         dim = self.dim
-
-        dstart_indx = 9 * d_idx
-        sstart_indx = 9 * s_idx
+        dimsq = self.dimsq
+        dstart_indx = dimsq * d_idx
+        sstart_indx = dimsq * s_idx
 
         for row in range(3):
             gmi[row] = 0
             gmj[row] = 0
             avi[row] = 0
 
-
         for row in range(dim):
             for col in range(dim):
-                rowcol = row * 3 + col
+                rowcol = row * dim + col
                 drowcol = dstart_indx + rowcol
                 srowcol = sstart_indx + rowcol
                 gmi[row] -= d_cm[drowcol] * XIJ[col] * WI
@@ -721,7 +725,7 @@ class WallBoundary(Equation):
 
 
 class UpdateGhostProps(Equation):
-    def __init__(self, dest, sources=None, dim=2):
+    def __init__(self, dest, dim, sources=None):
         """
         :class:`MPMUpdateGhostProps
         <pysph.sph.gas_dynamics.basic.MPMUpdateGhostProps>` modified
@@ -729,19 +733,28 @@ class UpdateGhostProps(Equation):
         """
         super().__init__(dest, sources)
         self.dim = dim
+        self.dimsq = dim * dim
         assert GHOST_TAG == 2
 
     def initialize(self, d_idx, d_orig_idx, d_p, d_tag, d_h, d_rho, d_dndh,
-                   d_psumdh, d_n):
-        idx = declare('int')
+                   d_n, d_cm):
+        idx, dim, dimsq = declare('int', 3)
+        row, col, rowcol, drowcol, dstart_indx, start_indx = declare('int', 6)
         if d_tag[d_idx] == 2:
             idx = d_orig_idx[d_idx]
             d_p[d_idx] = d_p[idx]
             d_h[d_idx] = d_h[idx]
             d_rho[d_idx] = d_rho[idx]
             d_dndh[d_idx] = d_dndh[idx]
-            d_psumdh[d_idx] = d_psumdh[idx]
             d_n[d_idx] = d_n[idx]
+            dim = self.dim
+            dimsq = self.dimsq
+            dstart_indx = dimsq * d_idx
+            start_indx = dimsq * idx
+            for row in range(dim):
+                for col in range(dim):
+                    rowcol = row * dim + col
+                    d_cm[dstart_indx + rowcol] = d_cm[start_indx + rowcol]
 
 
 class PECStep(IntegratorStep):

@@ -114,7 +114,7 @@ class SodShockTube(ShockTubeSetup):
 
         nsrsph = NSRSPHScheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            hfact=None
+            hfact=None, has_ghosts=True
         )
 
         s = SchemeChooser(
