@@ -28,7 +28,7 @@ from pysph.sph.equation import Equation
 from pysph.sph.integrator_step import IntegratorStep
 from pysph.sph.scheme import Scheme
 from pysph.sph.wc.linalg import (augmented_matrix, gj_solve, identity,
-                                 mat_mult, mat_vec_mult)
+                                 mat_mult, mat_vec_mult, dot)
 
 GHOST_TAG = get_ghost_tag()
 
@@ -526,7 +526,7 @@ class CorrectionMatrix(Equation):
 
 class MomentumAndEnergyMI1(Equation):
     def _get_helpers_(self):
-        return [mat_vec_mult]
+        return [mat_vec_mult, dot]
 
     def __init__(self, dest, sources, dim, fkern, beta=2.0):
         r"""
@@ -583,21 +583,21 @@ class MomentumAndEnergyMI1(Equation):
              d_au, d_av, d_aw, d_ae, XIJ, VIJ, HIJ, d_alpha, s_alpha,
              R2IJ, RHOIJ1, d_h, d_dndh, d_n, d_drhosumdh, s_h, s_dndh, s_n,
              s_drhosumdh, d_cm, s_cm, WI, WJ):
-        avi = declare("matrix(3)")
 
-        # p_i/rhoi**2
-        rhoi2 = d_rho[d_idx] * d_rho[d_idx]
-        pibrhoi2 = d_p[d_idx] / rhoi2
+        # TODO: Make eps a parameter
+        eps = 0.01
+        epssq = eps * eps
 
-        # pj/rhoj**2
-        rhoj2 = s_rho[s_idx] * s_rho[s_idx]
-        pjbrhoj2 = s_p[s_idx] / rhoj2
+        beta = self.beta
+
+        hi = self.fkern * d_h[d_idx]
+        hj = self.fkern * s_h[s_idx]
 
         # averaged sound speed
         cij = 0.5 * (d_cs[d_idx] + s_cs[s_idx])
 
         scm, dcm, idmat = declare('matrix(9)', 3)
-        gmi, gmj = declare('matrix(3)', 2)
+        gmi, gmj, etai, etaj, avi = declare('matrix(3)', 5)
         dstart_indx, sstart_indx, row, col = declare('int', 4)
         rowcol, drowcol, srowcol, dim, dimsq = declare('int', 5)
         dim = self.dim
@@ -605,10 +605,23 @@ class MomentumAndEnergyMI1(Equation):
         dstart_indx = dimsq * d_idx
         sstart_indx = dimsq * s_idx
 
-        for row in range(3):
+        for row in range(dim):
             gmi[row] = 0
             gmj[row] = 0
             avi[row] = 0
+            etai[row] = XIJ[row] / hi
+            etaj[row] = XIJ[row] / hj
+
+        etaisq = dot(etai, etai, dim)
+        etajsq = dot(etaj, etaj, dim)
+        mui = min(0, dot(VIJ, etai, dim)/(etaisq + epssq))
+        muj = min(0, dot(VIJ, etaj, dim) / (etajsq + epssq))
+
+
+        Qi = d_rho[d_idx] * (-d_alpha[d_idx] * d_cs[d_idx] * mui +
+                             beta * mui * mui)
+        Qj = s_rho[s_idx] * (-s_alpha[s_idx] * s_cs[s_idx] * muj +
+                             beta * muj * muj)
 
         for row in range(dim):
             for col in range(dim):
@@ -619,29 +632,14 @@ class MomentumAndEnergyMI1(Equation):
                 gmj[row] -= s_cm[srowcol] * XIJ[col] * WJ
 
         mj = s_m[s_idx]
-        hij = self.fkern * HIJ
-        vijdotxij = (VIJ[0] * XIJ[0] + VIJ[1] * XIJ[1] + VIJ[2] * XIJ[2])
 
-        # Artificial viscosity
-        if vijdotxij <= 0.0:
-            # viscosity
-            alpha = 0.5 * (d_alpha[d_idx] + s_alpha[s_idx])
-            muij = hij * vijdotxij / (R2IJ + 0.0001 * hij * hij)
-            common = alpha * muij * (cij - self.beta * muij) * mj * RHOIJ1 / 2
+        # p_i/rhoi**2
+        rhoi2 = d_rho[d_idx] * d_rho[d_idx]
+        pibrhoi2 = (d_p[d_idx] + Qi) / rhoi2
 
-            avi[0] = common * (gmi[0] + gmj[0])
-            avi[1] = common * (gmi[1] + gmj[1])
-            avi[2] = common * (gmi[2] + gmj[2])
-
-            # viscous contribution to velocity
-            d_au[d_idx] += avi[0]
-            d_av[d_idx] += avi[1]
-            d_aw[d_idx] += avi[2]
-
-            # viscous contribution to the thermal energy
-            d_ae[d_idx] -= 0.5 * (VIJ[0] * avi[0] +
-                                  VIJ[1] * avi[1] +
-                                  VIJ[2] * avi[2])
+        # pj/rhoj**2
+        rhoj2 = s_rho[s_idx] * s_rho[s_idx]
+        pjbrhoj2 = (s_p[s_idx] + Qj) / rhoj2
 
         # accelerations for velocity
         d_au[d_idx] -= mj * (pibrhoi2 * gmi[0] + pjbrhoj2 * gmj[0])
