@@ -176,19 +176,19 @@ class NSRSPHScheme(Scheme):
             g2.append(IdealGasEOS(dest=fluid, sources=None, gamma=self.gamma))
         equations.append(Group(equations=g2))
 
-        g3 = []
-        for fluid in self.fluids:
-            g3.append(VelocityGradDivC1(dest=fluid, sources=all_pa,
-                                        dim=self.dim))
-            g3.append(BalsaraSwitch(dest=fluid, sources=None,
-                                    alphaav=self.alphamax, fkern=self.fkern))
-        equations.append(Group(equations=g3))
-
         g3p1 = []
         for fluid in self.fluids:
             g3p1.append(CorrectionMatrix(dest=fluid, sources=all_pa,
                                          dim=self.dim))
         equations.append(Group(equations=g3p1))
+
+        g3p2 = []
+        for fluid in self.fluids:
+            g3p2.append(VelocityGradDivC1(dest=fluid, sources=all_pa,
+                                          dim=self.dim))
+            g3p2.append(BalsaraSwitch(dest=fluid, sources=None,
+                                      alphaav=self.alphamax, fkern=self.fkern))
+        equations.append(Group(equations=g3p2))
 
         g4 = []
         for solid in self.solids:
@@ -381,69 +381,58 @@ class VelocityGradDivC1(Equation):
         First Order consistent velocity gradient and divergence
         """
         self.dim = dim
+        self.dimsq = dim * dim
         super().__init__(dest, sources)
 
     def _get_helpers_(self):
-        return [augmented_matrix, gj_solve, identity, mat_mult]
+        return [mat_mult]
 
-    def initialize(self, d_gradv, d_idx, d_invtt, d_divv):
+    def initialize(self, d_gradv, d_idx, d_divv):
         dstart_indx, i, dim, dimsq = declare('int', 4)
         dim = self.dim
-        dimsq = dim * dim
+        dimsq = self.dimsq
         dstart_indx = dimsq * d_idx
 
         for i in range(dimsq):
             d_gradv[dstart_indx + i] = 0.0
-            d_invtt[dstart_indx + i] = 0.0
-
         d_divv[d_idx] = 0.0
 
-    def loop(self, d_idx, d_invtt, s_m, s_idx, VIJ, DWI, XIJ, d_gradv):
+    def loop(self, d_idx, VIJ, XIJ, d_gradv, WI,
+             d_m, d_rho):
         dstart_indx, row, col, drowcol, dim, dimsq = declare('int', 6)
         dim = self.dim
-        dimsq = dim * dim
+        dimsq = self.dimsq
         dstart_indx = d_idx * dimsq
+        mbbyrhob = d_m[d_idx] / d_rho[d_idx]
         for row in range(dim):
             for col in range(dim):
                 drowcol = dstart_indx + row * dim + col
-                d_invtt[drowcol] -= s_m[s_idx] * XIJ[row] * DWI[col]
-                d_gradv[drowcol] -= s_m[s_idx] * VIJ[row] * DWI[col]
+                d_gradv[drowcol] += mbbyrhob * VIJ[row] * XIJ[col] * WI
 
-    def post_loop(self, d_idx, d_gradv, d_invtt, d_divv):
-        tt, invtt, idmat, gradv = declare('matrix(9)', 4)
-        augtt = declare('matrix(18)')
+    def post_loop(self, d_idx, d_gradv, d_divv, d_cm):
+        tt, invtt, idmat, gradv, gradvpre, cm = declare('matrix(9)', 5)
 
         dstart_indx, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
 
         dim = self.dim
         dimsq = dim * dim
         dstart_indx = dimsq * d_idx
-        identity(idmat, dim)
-        identity(tt, dim)
 
         for row in range(dim):
             for col in range(dim):
                 rowcol = row * dim + col
                 drowcol = dstart_indx + rowcol
-                gradv[rowcol] = d_gradv[drowcol]
+                gradvpre[rowcol] = d_gradv[drowcol]
+                cm[rowcol] = d_cm[drowcol]
+
+        mat_mult(cm, gradvpre, dim, gradv)
 
         for row in range(dim):
+            d_divv[d_idx] += gradv[row * dim + row]
             for col in range(dim):
                 rowcol = row * dim + col
                 drowcol = dstart_indx + rowcol
-                tt[rowcol] = d_invtt[drowcol]
-
-        augmented_matrix(tt, idmat, dim, dim, dim, augtt)
-        gj_solve(augtt, dim, dim, invtt)
-        gradvls = declare('matrix(9)')
-        mat_mult(gradv, invtt, dim, gradvls)
-
-        for row in range(dim):
-            d_divv[d_idx] += gradvls[row * dim + row]
-            for col in range(dim):
-                rowcol = row * dim + col
-                drowcol = dstart_indx + rowcol
-                d_gradv[drowcol] = gradvls[rowcol]
+                d_gradv[drowcol] = gradv[rowcol]
 
 
 class BalsaraSwitch(Equation):
@@ -457,7 +446,6 @@ class BalsaraSwitch(Equation):
 
         curlv[0] = 0
         curlv[1] = 0
-
         curlv[2] = 0
 
         abscurlv = sqrt(curlv[0] * curlv[0] +
@@ -477,6 +465,9 @@ class CorrectionMatrix(Equation):
         self.dim = dim
         self.dimsq = dim * dim
         super().__init__(dest, sources)
+
+    def _get_helpers_(self):
+        return [identity, augmented_matrix, gj_solve]
 
     def initialize(self, d_cm, d_idx):
         dsi, i, dimsq = declare('int', 3)
@@ -614,9 +605,8 @@ class MomentumAndEnergyMI1(Equation):
 
         etaisq = dot(etai, etai, dim)
         etajsq = dot(etaj, etaj, dim)
-        mui = min(0, dot(VIJ, etai, dim)/(etaisq + epssq))
+        mui = min(0, dot(VIJ, etai, dim) / (etaisq + epssq))
         muj = min(0, dot(VIJ, etaj, dim) / (etajsq + epssq))
-
 
         Qi = d_rho[d_idx] * (-d_alpha[d_idx] * d_cs[d_idx] * mui +
                              beta * mui * mui)
