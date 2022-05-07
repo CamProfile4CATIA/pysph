@@ -229,7 +229,7 @@ class NSRSPHScheme(Scheme):
             pa.add_property('orig_idx', type='int')
             # Guess for number density.
             pa.add_property('n', data=pa.rho / pa.m)
-            pa.add_property('gradv', stride=9)
+            pa.add_property('dv', stride=9)
             pa.add_property('invtt', stride=9)
             pa.add_property('cm', stride=9)
             nfp = pa.get_number_of_particles()
@@ -370,9 +370,71 @@ class IdealGasEOS(Equation):
         self.gamma1 = gamma - 1.0
         super(IdealGasEOS, self).__init__(dest, sources)
 
-    def post_loop(self, d_idx, d_p, d_rho, d_e, d_cs):
+    def initialize(self, d_idx, d_p, d_rho, d_e, d_cs):
         d_p[d_idx] = self.gamma1 * d_rho[d_idx] * d_e[d_idx]
         d_cs[d_idx] = sqrt(self.gamma * d_p[d_idx] / d_rho[d_idx])
+
+
+class AuxillaryGradient(Equation):
+    def __init__(self, dest, sources, dim):
+        """
+        First Order consistent velocity gradient and divergence
+        """
+        self.dim = dim
+        self.dimsq = dim * dim
+        super().__init__(dest, sources)
+
+    def _get_helpers_(self):
+        return [mat_mult, augmented_matrix, identity, gj_solve]
+
+    def initialize(self, d_dvaux, d_idx, d_invdm):
+        dstart_indx, i, dim, dimsq = declare('int', 4)
+        dim = self.dim
+        dimsq = self.dimsq
+        dstart_indx = dimsq * d_idx
+
+        for i in range(dimsq):
+            d_dvaux[dstart_indx + i] = 0.0
+            d_invdm[dstart_indx + i] = 0.0
+
+    def loop(self, d_idx, VIJ, XIJ, d_invdm, DWI, d_dvaux,
+             s_m, s_idx):
+        dstart_indx, row, col, drowcol, dim, dimsq = declare('int', 6)
+        dim = self.dim
+        dimsq = self.dimsq
+        dstart_indx = d_idx * dimsq
+        for row in range(dim):
+            for col in range(dim):
+                drowcol = dstart_indx + row * dim + col
+                d_dvaux[drowcol] += s_m[s_idx] * VIJ[row] * DWI[col]
+                d_invdm[drowcol] += s_m[s_idx] * XIJ[row] * DWI[col]
+
+    def post_loop(self, d_idx, d_dv, d_divv, d_invdm, d_dvaux):
+        dstart_indx, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
+        dim = self.dim
+        dimsq = dim * dim
+        dstart_indx = dimsq * d_idx
+
+        invdm, idmat, dvaux, dvauxpre, dm = declare('matrix(9)', 5)
+        identity(idmat, dim)
+
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * dim + col
+                drowcol = dstart_indx + rowcol
+                dvauxpre[rowcol] = d_dvaux[drowcol]
+                invdm[rowcol] = d_invdm[drowcol]
+
+        auginvdm = declare('matrix(18)')
+        augmented_matrix(invdm, idmat, dim, dim, dim, auginvdm)
+        gj_solve(auginvdm, dim, dim, dm)
+        mat_mult(dm, dvauxpre, dim, dvaux)
+
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * dim + col
+                drowcol = dstart_indx + rowcol
+                d_dvaux[drowcol] = dvaux[rowcol]
 
 
 class VelocityGradDivC1(Equation):
@@ -387,30 +449,30 @@ class VelocityGradDivC1(Equation):
     def _get_helpers_(self):
         return [mat_mult]
 
-    def initialize(self, d_gradv, d_idx, d_divv):
+    def initialize(self, d_dv, d_idx, d_divv):
         dstart_indx, i, dim, dimsq = declare('int', 4)
         dim = self.dim
         dimsq = self.dimsq
         dstart_indx = dimsq * d_idx
 
         for i in range(dimsq):
-            d_gradv[dstart_indx + i] = 0.0
+            d_dv[dstart_indx + i] = 0.0
         d_divv[d_idx] = 0.0
 
-    def loop(self, d_idx, VIJ, XIJ, d_gradv, WI,
-             d_m, d_rho):
+    def loop(self, d_idx, VIJ, XIJ, d_dv, WI,
+             s_m, s_rho, s_idx):
         dstart_indx, row, col, drowcol, dim, dimsq = declare('int', 6)
         dim = self.dim
         dimsq = self.dimsq
         dstart_indx = d_idx * dimsq
-        mbbyrhob = d_m[d_idx] / d_rho[d_idx]
+        mbbyrhob = s_m[s_idx] / s_rho[s_idx]
         for row in range(dim):
             for col in range(dim):
                 drowcol = dstart_indx + row * dim + col
-                d_gradv[drowcol] += mbbyrhob * VIJ[row] * XIJ[col] * WI
+                d_dv[drowcol] += mbbyrhob * VIJ[row] * XIJ[col] * WI
 
-    def post_loop(self, d_idx, d_gradv, d_divv, d_cm):
-        tt, invtt, idmat, gradv, gradvpre, cm = declare('matrix(9)', 5)
+    def post_loop(self, d_idx, d_dv, d_divv, d_cm):
+        dv, dvpre, cm = declare('matrix(9)', 3)
 
         dstart_indx, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
 
@@ -422,17 +484,17 @@ class VelocityGradDivC1(Equation):
             for col in range(dim):
                 rowcol = row * dim + col
                 drowcol = dstart_indx + rowcol
-                gradvpre[rowcol] = d_gradv[drowcol]
+                dvpre[rowcol] = d_dv[drowcol]
                 cm[rowcol] = d_cm[drowcol]
 
-        mat_mult(cm, gradvpre, dim, gradv)
+        mat_mult(cm, dvpre, dim, dv)
 
         for row in range(dim):
-            d_divv[d_idx] += gradv[row * dim + row]
+            d_divv[d_idx] += dv[row * dim + row]
             for col in range(dim):
                 rowcol = row * dim + col
                 drowcol = dstart_indx + rowcol
-                d_gradv[drowcol] = gradv[rowcol]
+                d_dv[drowcol] = dv[rowcol]
 
 
 class BalsaraSwitch(Equation):
@@ -441,7 +503,7 @@ class BalsaraSwitch(Equation):
         self.fkern = fkern
         super().__init__(dest, sources)
 
-    def post_loop(self, d_h, d_idx, d_cs, d_divv, d_gradv, d_alpha):
+    def post_loop(self, d_h, d_idx, d_cs, d_divv, d_dv, d_alpha):
         curlv = declare('matrix(3)')
 
         curlv[0] = 0
@@ -476,7 +538,7 @@ class CorrectionMatrix(Equation):
         for i in range(dimsq):
             d_cm[dsi + i] = 0.0
 
-    def loop(self, d_idx, d_invtt, s_m, s_idx, VIJ, DWI, XIJ, d_gradv,
+    def loop(self, d_idx, d_invtt, s_m, s_idx, VIJ, DWI, XIJ, d_dv,
              s_rho, d_cm, WI):
         dstart_indx, row, col, drowcol, dim, dimsq = declare('int', 6)
         dim = self.dim
@@ -488,7 +550,7 @@ class CorrectionMatrix(Equation):
                 drowcol = dstart_indx + row * dim + col
                 d_cm[drowcol] += mbbyrhob * XIJ[row] * XIJ[col] * WI
 
-    def post_loop(self, d_idx, d_gradv, d_invtt, d_divv, d_cm):
+    def post_loop(self, d_idx, d_dv, d_invtt, d_divv, d_cm):
         invcm, cm, idmat = declare('matrix(9)', 3)
         augcm = declare('matrix(18)')
         dstart_indx, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
