@@ -171,10 +171,10 @@ class NSRSPHScheme(Scheme):
                 equations=g1, update_nnps=True, iterate=True,
                 max_iterations=self.max_density_iterations))
 
-        g2 = []
+        g2p2 = []
         for fluid in self.fluids:
-            g2.append(IdealGasEOS(dest=fluid, sources=None, gamma=self.gamma))
-        equations.append(Group(equations=g2))
+            g2p2.append(IdealGasEOS(dest=fluid, sources=None, gamma=self.gamma))
+        equations.append(Group(equations=g2p2))
 
         g3p1 = []
         for fluid in self.fluids:
@@ -230,7 +230,8 @@ class NSRSPHScheme(Scheme):
             # Guess for number density.
             pa.add_property('n', data=pa.rho / pa.m)
             pa.add_property('dv', stride=9)
-            pa.add_property('invtt', stride=9)
+            pa.add_property('dvaux', stride=9)
+            pa.add_property('invdm', stride=9)
             pa.add_property('cm', stride=9)
             nfp = pa.get_number_of_particles()
             pa.orig_idx[:] = numpy.arange(nfp)
@@ -538,7 +539,7 @@ class CorrectionMatrix(Equation):
         for i in range(dimsq):
             d_cm[dsi + i] = 0.0
 
-    def loop(self, d_idx, d_invtt, s_m, s_idx, VIJ, DWI, XIJ, d_dv,
+    def loop(self, d_idx, s_m, s_idx, VIJ, DWI, XIJ, d_dv,
              s_rho, d_cm, WI):
         dstart_indx, row, col, drowcol, dim, dimsq = declare('int', 6)
         dim = self.dim
@@ -550,7 +551,7 @@ class CorrectionMatrix(Equation):
                 drowcol = dstart_indx + row * dim + col
                 d_cm[drowcol] += mbbyrhob * XIJ[row] * XIJ[col] * WI
 
-    def post_loop(self, d_idx, d_dv, d_invtt, d_divv, d_cm):
+    def post_loop(self, d_idx, d_dv, d_divv, d_cm):
         invcm, cm, idmat = declare('matrix(9)', 3)
         augcm = declare('matrix(18)')
         dstart_indx, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
