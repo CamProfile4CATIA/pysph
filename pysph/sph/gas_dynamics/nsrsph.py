@@ -171,10 +171,13 @@ class NSRSPHScheme(Scheme):
                 equations=g1, update_nnps=True, iterate=True,
                 max_iterations=self.max_density_iterations))
 
-        g2p2 = []
+        g2 = []
         for fluid in self.fluids:
-            g2p2.append(IdealGasEOS(dest=fluid, sources=None, gamma=self.gamma))
-        equations.append(Group(equations=g2p2))
+            g2.append(
+                AuxillaryGradient(dest=fluid, sources=all_pa, dim=self.dim))
+            g2.append(
+                IdealGasEOS(dest=fluid, sources=None, gamma=self.gamma))
+        equations.append(Group(equations=g2))
 
         g3p1 = []
         for fluid in self.fluids:
@@ -184,6 +187,8 @@ class NSRSPHScheme(Scheme):
 
         g3p2 = []
         for fluid in self.fluids:
+            g3p2.append(SecondDerivative(dest=fluid, sources=all_pa,
+                                         dim=self.dim))
             g3p2.append(VelocityGradDivC1(dest=fluid, sources=all_pa,
                                           dim=self.dim))
             g3p2.append(BalsaraSwitch(dest=fluid, sources=None,
@@ -233,6 +238,7 @@ class NSRSPHScheme(Scheme):
             pa.add_property('dvaux', stride=9)
             pa.add_property('invdm', stride=9)
             pa.add_property('cm', stride=9)
+            pa.add_property('ddv', stride=27)
             nfp = pa.get_number_of_particles()
             pa.orig_idx[:] = numpy.arange(nfp)
             pa.set_output_arrays(output_props)
@@ -498,6 +504,78 @@ class VelocityGradDivC1(Equation):
                 d_dv[drowcol] = dv[rowcol]
 
 
+class SecondDerivative(Equation):
+    def __init__(self, dest, sources, dim):
+        """
+        First Order consistent velocity gradient and divergence
+        """
+        self.dim = dim
+        self.dimsq = dim * dim
+        super().__init__(dest, sources)
+
+    def _get_helpers_(self):
+        return [mat_mult]
+
+    def initialize(self, d_ddv, d_idx, d_divv):
+        dstart_indx, i, dim, dimsq = declare('int', 4)
+        dimsq = self.dimsq
+        dstart_indx = dimsq * d_idx
+        for i in range(dimsq):
+            d_ddv[dstart_indx + i] = 0.0
+
+    def loop(self, d_idx, VIJ, XIJ, d_dvaux, s_dvaux, WI, d_ddv,
+             s_m, s_rho, s_idx):
+        dstart_indx, row, col, drowcol, dim, dimsq = declare('int', 6)
+        blk, dblkrowcol, sstart_indx, srowcol, rowcol = declare('int', 5)
+        dim = self.dim
+        dimsq = self.dimsq
+        dstart_indx = d_idx * dimsq
+        sstart_indx = s_idx * dimsq
+        mbbyrhob = s_m[s_idx] / s_rho[s_idx]
+
+        for blk in range(dim):
+            for row in range(dim):
+                for col in range(dim):
+                    rowcol = row * dim + col
+                    drowcol = dstart_indx + rowcol
+                    srowcol = sstart_indx + rowcol
+                    dblkrowcol = dstart_indx * dim + blk * dimsq + rowcol
+                    dvij = d_dvaux[drowcol] - s_dvaux[srowcol]
+                    d_ddv[dblkrowcol] += mbbyrhob * dvij * XIJ[col] * WI
+
+    def post_loop(self, d_idx, d_dv, d_divv, d_cm, d_ddv):
+        ddv, ddvpre = declare('matrix(27)', 2)
+        ddvpreb, ddvb, cm = declare('matrix(9)', 3)
+        dstart_indx, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
+        blk, blkrowcol, dblkrowcol, ddstart_indx = declare('int', 4)
+
+        dim = self.dim
+        dimsq = self.dimsq
+        dstart_indx = dimsq * d_idx
+        ddstart_indx = dstart_indx * dimsq
+
+        for blk in range(dim):
+            for row in range(dim):
+                for col in range(dim):
+                    blkrowcol = blk * dimsq + row * dim + col
+                    dblkrowcol = dstart_indx * dim + blkrowcol
+                    ddvpre[blkrowcol] = d_ddv[dblkrowcol]
+                    cm[rowcol] = d_cm[drowcol]
+
+        for blk in range(dim):
+            for row in range(dim):
+                for col in range(dim):
+                    rowcol = row * dim + col
+                    blkrowcol = blk * dimsq + rowcol
+                    ddvpreb[rowcol] = ddvpre[blkrowcol]
+            mat_mult(cm, ddvpreb, dim, ddvb)
+            for row in range(dim):
+                for col in range(dim):
+                    rowcol = row * dim + col
+                    dblkrowcol = ddstart_indx + blk * dimsq + rowcol
+                    d_ddv[dblkrowcol] = ddvb[rowcol]
+
+
 class BalsaraSwitch(Equation):
     def __init__(self, dest, sources, alphaav, fkern):
         self.alphaav = alphaav
@@ -636,7 +714,8 @@ class MomentumAndEnergyMI1(Equation):
     def loop(self, d_idx, s_idx, d_m, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
              d_au, d_av, d_aw, d_ae, XIJ, VIJ, HIJ, d_alpha, s_alpha,
              R2IJ, RHOIJ1, d_h, d_dndh, d_n, d_drhosumdh, s_h, s_dndh, s_n,
-             s_drhosumdh, d_cm, s_cm, WI, WJ):
+             s_drhosumdh, d_cm, s_cm, WI, WJ, d_u, d_v, d_w, s_u, s_v,
+             s_w):
 
         # TODO: Make eps a parameter
         eps = 0.01
@@ -651,7 +730,7 @@ class MomentumAndEnergyMI1(Equation):
         cij = 0.5 * (d_cs[d_idx] + s_cs[s_idx])
 
         scm, dcm, idmat = declare('matrix(9)', 3)
-        gmi, gmj, etai, etaj, avi = declare('matrix(3)', 5)
+        gmi, gmj, etai, etaj, avi, vij = declare('matrix(3)', 6)
         dstart_indx, sstart_indx, row, col = declare('int', 4)
         rowcol, drowcol, srowcol, dim, dimsq = declare('int', 5)
         dim = self.dim
@@ -666,10 +745,14 @@ class MomentumAndEnergyMI1(Equation):
             etai[row] = XIJ[row] / hi
             etaj[row] = XIJ[row] / hj
 
+        vij[0] = d_u[d_idx] - s_u[s_idx]
+        vij[1] = d_v[d_idx] - s_v[s_idx]
+        vij[2] = d_w[d_idx] - s_w[s_idx]
+
         etaisq = dot(etai, etai, dim)
         etajsq = dot(etaj, etaj, dim)
-        mui = min(0, dot(VIJ, etai, dim) / (etaisq + epssq))
-        muj = min(0, dot(VIJ, etaj, dim) / (etajsq + epssq))
+        mui = min(0, dot(vij, etai, dim) / (etaisq + epssq))
+        muj = min(0, dot(vij, etaj, dim) / (etajsq + epssq))
 
         Qi = d_rho[d_idx] * (-d_alpha[d_idx] * d_cs[d_idx] * mui +
                              beta * mui * mui)
@@ -700,7 +783,7 @@ class MomentumAndEnergyMI1(Equation):
         d_aw[d_idx] -= mj * (pibrhoi2 * gmi[2] + pjbrhoj2 * gmj[2])
 
         # accelerations for the thermal energy
-        vijdotdwi = VIJ[0] * gmi[0] + VIJ[1] * gmi[1] + VIJ[2] * gmi[2]
+        vijdotdwi = vij[0] * gmi[0] + vij[1] * gmi[1] + vij[2] * gmi[2]
         d_ae[d_idx] += mj * pibrhoi2 * vijdotdwi
 
 
