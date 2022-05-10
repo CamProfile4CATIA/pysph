@@ -36,7 +36,8 @@ GHOST_TAG = get_ghost_tag()
 class NSRSPHScheme(Scheme):
     def __init__(self, fluids, solids, dim, gamma, hfact, beta=2.0, fkern=1.0,
                  max_density_iterations=250, alphamax=1.0,
-                 density_iteration_tolerance=1e-3, has_ghosts=False):
+                 density_iteration_tolerance=1e-3, has_ghosts=False,
+                 eta_crit=0.3, eta_fold=0.2):
         """
         Newtonian limit of Rosswog's special-relativistic SPH.
 
@@ -105,6 +106,8 @@ class NSRSPHScheme(Scheme):
         self.has_ghosts = has_ghosts
         self.fkern = fkern
         self.alphamax = alphamax
+        self.eta_crit = eta_crit
+        self.eta_fold = eta_fold
 
     def add_user_options(self, group):
         group.add_argument("--alpha-max", action="store", type=float,
@@ -127,9 +130,9 @@ class NSRSPHScheme(Scheme):
     def configure_solver(self, kernel=None, integrator_cls=None,
                          extra_steppers=None, **kw):
 
-        from pysph.base.kernels import Gaussian
+        from pysph.base.kernels import QuinticSpline
         if kernel is None:
-            kernel = Gaussian(dim=self.dim)
+            kernel = QuinticSpline(dim=self.dim)
 
         if hasattr(kernel, 'fkern'):
             self.fkern = kernel.fkern
@@ -211,7 +214,9 @@ class NSRSPHScheme(Scheme):
         for fluid in self.fluids:
             g5.append(MomentumAndEnergyMI1(dest=fluid, sources=all_pa,
                                            dim=self.dim, beta=self.beta,
-                                           fkern=self.fkern))
+                                           fkern=self.fkern,
+                                           eta_crit=self.eta_crit,
+                                           eta_fold=self.eta_fold))
         equations.append(Group(equations=g5))
 
         return equations
@@ -660,7 +665,8 @@ class MomentumAndEnergyMI1(Equation):
     def _get_helpers_(self):
         return [mat_vec_mult, dot]
 
-    def __init__(self, dest, sources, dim, fkern, beta=2.0):
+    def __init__(self, dest, sources, dim, fkern, eta_crit=0.3, eta_fold=0.2,
+                 beta=2.0):
         r"""
         Momentum and Energy Equations with artificial viscosity.
 
@@ -701,6 +707,8 @@ class MomentumAndEnergyMI1(Equation):
         self.dim = dim
         self.fkern = fkern
         self.dimsq = dim * dim
+        self.eta_crit = eta_crit
+        self.eta_fold = eta_fold
         super().__init__(dest, sources)
 
     def initialize(self, d_idx, d_au, d_av, d_aw, d_ae):
@@ -715,7 +723,7 @@ class MomentumAndEnergyMI1(Equation):
              d_au, d_av, d_aw, d_ae, XIJ, VIJ, HIJ, d_alpha, s_alpha,
              R2IJ, RHOIJ1, d_h, d_dndh, d_n, d_drhosumdh, s_h, s_dndh, s_n,
              s_drhosumdh, d_cm, s_cm, WI, WJ, d_u, d_v, d_w, s_u, s_v,
-             s_w):
+             s_w, d_dv, s_dv):
 
         # TODO: Make eps a parameter
         eps = 0.01
@@ -729,9 +737,9 @@ class MomentumAndEnergyMI1(Equation):
         # averaged sound speed
         cij = 0.5 * (d_cs[d_idx] + s_cs[s_idx])
 
-        scm, dcm, idmat = declare('matrix(9)', 3)
+        scm, dcm, idmat, dvdeli, dvdelj, vir, vjr, tmpdvxij = declare('matrix(9)', 8)
         gmi, gmj, etai, etaj, avi, vij = declare('matrix(3)', 6)
-        dstart_indx, sstart_indx, row, col = declare('int', 4)
+        dstart_indx, sstart_indx, row, col, d = declare('int', 5)
         rowcol, drowcol, srowcol, dim, dimsq = declare('int', 5)
         dim = self.dim
         dimsq = self.dimsq
@@ -745,12 +753,87 @@ class MomentumAndEnergyMI1(Equation):
             etai[row] = XIJ[row] / hi
             etaj[row] = XIJ[row] / hj
 
-        vij[0] = d_u[d_idx] - s_u[s_idx]
-        vij[1] = d_v[d_idx] - s_v[s_idx]
-        vij[2] = d_w[d_idx] - s_w[s_idx]
-
         etaisq = dot(etai, etai, dim)
         etajsq = dot(etaj, etaj, dim)
+
+        etaij = sqrt(min(etaisq, etajsq))
+
+
+
+        tmpri = 0.0
+        tmprj = 0.0
+        d = dim
+        for row in range(d):
+            for col in range(d):
+                tmpri += d_dv[d*d*d_idx + d*row + col] * XIJ[row] * XIJ[col]
+                tmprj += s_dv[d*d*s_idx + d*row + col] * XIJ[row] * XIJ[col]
+        rij = tmpri/tmprj
+
+        tmprij = min(1, 4*rij/((1 + rij)*(1 + rij)))
+        phiij = max(0, tmprij)
+
+        tmpxij = dot(XIJ, XIJ, d)
+        tmpxij2 = sqrt(tmpxij)
+        etai_scalar = tmpxij2/hi
+        etaj_scalar = tmpxij2/hj
+        etaij = min(etai_scalar, etaj_scalar)
+
+        if etaij < self.eta_crit:
+            tmpphi = (etaij - self.eta_crit)/self.eta_fold
+            phiij = phiij * exp(-tmpphi*tmpphi)
+
+        for row in range(d):
+            s = 0.0
+            for col in range(d):
+                s += (d_dv[d*d*d_idx + d*row + col] +
+                      s_dv[d*d*s_idx + d*row + col]) * XIJ[col]
+            tmpdvxij[row] = s
+
+        vij[0] = d_u[d_idx] - s_u[s_idx] - 0.5*phiij * tmpdvxij[0]
+        vij[1] = d_v[d_idx] - s_v[s_idx] - 0.5*phiij * tmpdvxij[1]
+        vij[2] = d_w[d_idx] - s_w[s_idx] - 0.5*phiij * tmpdvxij[2]
+        # aanum = 0.0
+        # aaden = 0.0
+        # for row in range(dim):
+        #     for col in range(dim):
+        #         rowcol = dim * row + col
+        #         aanum += d_dv[dstart_indx + rowcol] * XIJ[row] * XIJ[col]
+        #         aaden += s_dv[sstart_indx + rowcol] * XIJ[row] * XIJ[col]
+        # aaij = aanum / aaden
+        # aaji = aaden / aanum
+        #
+        # phiijin = min(1, 4 * aaij / ((1 + aaij) * (1 + aaij)))
+        # phijiin = min(1, 4 * aaji / ((1 + aaji) * (1 + aaji)))
+        # phiij = max(0, phiijin)
+        # phiji = max(0, phijiin)
+        #
+        # if etaij < self.eta_crit:
+        #     powin = (etaij - self.eta_crit) / self.eta_fold
+        #     phiij = phiij * exp(-powin * powin)
+        #     phiji = phiji * exp(-powin * powin)
+        #
+        # for row in range(dim):
+        #     dvdelirow = 0.0
+        #     dvdeljrow = 0.0
+        #     for col in range(dim):
+        #         rowcol = dim * row + col
+        #         dvdelirow += d_dv[dstart_indx + rowcol] * 0.5 * XIJ[col]
+        #         dvdeljrow -= s_dv[sstart_indx + rowcol] * 0.5 * XIJ[col]
+        #     dvdeli[row] = dvdeljrow
+        #     dvdelj[row] = dvdeljrow
+        #
+        # vir[0] = d_u[d_idx] #+ phiij * dvdeli[0]
+        # vir[1] = d_v[d_idx] #+ phiij * dvdeli[1]
+        # vir[2] = d_w[d_idx] #+ phiij * dvdeli[2]
+        #
+        # vjr[0] = s_u[s_idx] + phiji * dvdelj[0]
+        # vjr[1] = s_v[s_idx] + phiji * dvdelj[1]
+        # vjr[2] = s_w[s_idx] + phiji * dvdelj[2]
+
+        # vij[0] = vir[0] - vjr[0]
+        # vij[1] = vir[1] - vjr[1]
+        # vij[2] = vir[2] - vjr[2]
+
         mui = min(0, dot(vij, etai, dim) / (etaisq + epssq))
         muj = min(0, dot(vij, etaj, dim) / (etajsq + epssq))
 
