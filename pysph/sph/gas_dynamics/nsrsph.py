@@ -737,9 +737,9 @@ class MomentumAndEnergyMI1(Equation):
         # averaged sound speed
         cij = 0.5 * (d_cs[d_idx] + s_cs[s_idx])
 
-        scm, dcm, idmat, dvdeli, dvdelj, vir, vjr, tmpdvxij = declare('matrix(9)', 8)
+        scm, dcm, idmat, dvdeli, dvdelj, vir, vjr, dvdel = declare('matrix(9)',8)
         gmi, gmj, etai, etaj, avi, vij = declare('matrix(3)', 6)
-        dstart_indx, sstart_indx, row, col, d = declare('int', 5)
+        dstart_indx, sstart_indx, row, col = declare('int', 4)
         rowcol, drowcol, srowcol, dim, dimsq = declare('int', 5)
         dim = self.dim
         dimsq = self.dimsq
@@ -758,81 +758,34 @@ class MomentumAndEnergyMI1(Equation):
 
         etaij = sqrt(min(etaisq, etajsq))
 
+        aanum = 0.0
+        aaden = 0.0
+        for row in range(dim):
+            for col in range(dim):
+                aanum += d_dv[dim * dim * d_idx + dim * row + col] * XIJ[row] * \
+                         XIJ[col]
+                aaden += s_dv[dim * dim * s_idx + dim * row + col] * XIJ[row] * \
+                         XIJ[col]
+        aaij = aanum / aaden
 
-
-        tmpri = 0.0
-        tmprj = 0.0
-        d = dim
-        for row in range(d):
-            for col in range(d):
-                tmpri += d_dv[d*d*d_idx + d*row + col] * XIJ[row] * XIJ[col]
-                tmprj += s_dv[d*d*s_idx + d*row + col] * XIJ[row] * XIJ[col]
-        rij = tmpri/tmprj
-
-        tmprij = min(1, 4*rij/((1 + rij)*(1 + rij)))
-        phiij = max(0, tmprij)
-
-        tmpxij = dot(XIJ, XIJ, d)
-        tmpxij2 = sqrt(tmpxij)
-        etai_scalar = tmpxij2/hi
-        etaj_scalar = tmpxij2/hj
-        etaij = min(etai_scalar, etaj_scalar)
+        phiijin = min(1, 4 * aaij / ((1 + aaij) * (1 + aaij)))
+        phiij = max(0, phiijin)
+        etaij = sqrt(min(etaisq, etajsq))
 
         if etaij < self.eta_crit:
-            tmpphi = (etaij - self.eta_crit)/self.eta_fold
-            phiij = phiij * exp(-tmpphi*tmpphi)
+            powin = (etaij - self.eta_crit) / self.eta_fold
+            phiij = phiij * exp(-powin * powin)
 
-        for row in range(d):
-            s = 0.0
-            for col in range(d):
-                s += (d_dv[d*d*d_idx + d*row + col] +
-                      s_dv[d*d*s_idx + d*row + col]) * XIJ[col]
-            tmpdvxij[row] = s
+        for row in range(dim):
+            dvdel[row] = 0.0
+            for col in range(dim):
+                dvdel[row] -= (d_dv[dim * dim * d_idx + dim * row + col] +
+                               s_dv[dim * dim * s_idx + dim * row + col]) * \
+                              0.5 * XIJ[col]
 
-        vij[0] = d_u[d_idx] - s_u[s_idx] - 0.5*phiij * tmpdvxij[0]
-        vij[1] = d_v[d_idx] - s_v[s_idx] - 0.5*phiij * tmpdvxij[1]
-        vij[2] = d_w[d_idx] - s_w[s_idx] - 0.5*phiij * tmpdvxij[2]
-        # aanum = 0.0
-        # aaden = 0.0
-        # for row in range(dim):
-        #     for col in range(dim):
-        #         rowcol = dim * row + col
-        #         aanum += d_dv[dstart_indx + rowcol] * XIJ[row] * XIJ[col]
-        #         aaden += s_dv[sstart_indx + rowcol] * XIJ[row] * XIJ[col]
-        # aaij = aanum / aaden
-        # aaji = aaden / aanum
-        #
-        # phiijin = min(1, 4 * aaij / ((1 + aaij) * (1 + aaij)))
-        # phijiin = min(1, 4 * aaji / ((1 + aaji) * (1 + aaji)))
-        # phiij = max(0, phiijin)
-        # phiji = max(0, phijiin)
-        #
-        # if etaij < self.eta_crit:
-        #     powin = (etaij - self.eta_crit) / self.eta_fold
-        #     phiij = phiij * exp(-powin * powin)
-        #     phiji = phiji * exp(-powin * powin)
-        #
-        # for row in range(dim):
-        #     dvdelirow = 0.0
-        #     dvdeljrow = 0.0
-        #     for col in range(dim):
-        #         rowcol = dim * row + col
-        #         dvdelirow += d_dv[dstart_indx + rowcol] * 0.5 * XIJ[col]
-        #         dvdeljrow -= s_dv[sstart_indx + rowcol] * 0.5 * XIJ[col]
-        #     dvdeli[row] = dvdeljrow
-        #     dvdelj[row] = dvdeljrow
-        #
-        # vir[0] = d_u[d_idx] #+ phiij * dvdeli[0]
-        # vir[1] = d_v[d_idx] #+ phiij * dvdeli[1]
-        # vir[2] = d_w[d_idx] #+ phiij * dvdeli[2]
-        #
-        # vjr[0] = s_u[s_idx] + phiji * dvdelj[0]
-        # vjr[1] = s_v[s_idx] + phiji * dvdelj[1]
-        # vjr[2] = s_w[s_idx] + phiji * dvdelj[2]
-
-        # vij[0] = vir[0] - vjr[0]
-        # vij[1] = vir[1] - vjr[1]
-        # vij[2] = vir[2] - vjr[2]
+        vij[0] = VIJ[0] + phiij * dvdel[0]
+        vij[1] = VIJ[1] + phiij * dvdel[1]
+        vij[2] = VIJ[2] + phiij * dvdel[2]
 
         mui = min(0, dot(vij, etai, dim) / (etaisq + epssq))
         muj = min(0, dot(vij, etaj, dim) / (etajsq + epssq))
@@ -866,7 +819,7 @@ class MomentumAndEnergyMI1(Equation):
         d_aw[d_idx] -= mj * (pibrhoi2 * gmi[2] + pjbrhoj2 * gmj[2])
 
         # accelerations for the thermal energy
-        vijdotdwi = vij[0] * gmi[0] + vij[1] * gmi[1] + vij[2] * gmi[2]
+        vijdotdwi = VIJ[0] * gmi[0] + VIJ[1] * gmi[1] + VIJ[2] * gmi[2]
         d_ae[d_idx] += mj * pibrhoi2 * vijdotdwi
 
 
