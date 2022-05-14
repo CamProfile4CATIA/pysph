@@ -190,10 +190,10 @@ class NSRSPHScheme(Scheme):
 
         g3p2 = []
         for fluid in self.fluids:
-            g3p2.append(SecondDerivative(dest=fluid, sources=all_pa,
-                                         dim=self.dim))
-            g3p2.append(VelocityGradDivC1(dest=fluid, sources=all_pa,
-                                          dim=self.dim))
+            g3p2.append(SecondGradient(dest=fluid, sources=all_pa,
+                                       dim=self.dim))
+            g3p2.append(FirstGradient(dest=fluid, sources=all_pa,
+                                      dim=self.dim))
             g3p2.append(BalsaraSwitch(dest=fluid, sources=None,
                                       alphaav=self.alphamax, fkern=self.fkern))
         equations.append(Group(equations=g3p2))
@@ -447,7 +447,7 @@ class AuxillaryGradient(Equation):
                 drowcol = dstart_indx + rowcol
                 d_dvaux[drowcol] = dvaux[rowcol]
 
-class VelocityGradDivC1(Equation):
+class FirstGradient(Equation):
     def __init__(self, dest, sources, dim):
         """
         First Order consistent velocity gradient and divergence
@@ -507,7 +507,7 @@ class VelocityGradDivC1(Equation):
                 d_dv[drowcol] = dv[rowcol]
 
 
-class SecondDerivative(Equation):
+class SecondGradient(Equation):
     def __init__(self, dest, sources, dim):
         """
         First Order consistent velocity gradient and divergence
@@ -520,11 +520,12 @@ class SecondDerivative(Equation):
         return [mat_mult]
 
     def initialize(self, d_ddv, d_idx, d_divv):
-        dstart_indx, i, dim, dimsq = declare('int', 4)
-        dimsq = self.dimsq
-        dstart_indx = dimsq * d_idx
-        for i in range(dimsq*dim):
-            d_ddv[dstart_indx*dim + i] = 0.0
+        ddstart_indx, i, dim, dimcu, blk, row, col = declare('int', 7)
+        dim = self.dim
+        dimcu = dim * dim * dim
+        ddstart_indx = dimcu * d_idx
+        for i in range(dimcu):
+            d_ddv[ddstart_indx + i] = 0.0
 
     def loop(self, d_idx, VIJ, XIJ, d_dvaux, s_dvaux, WI, d_ddv,
              s_m, s_rho, s_idx):
@@ -535,35 +536,32 @@ class SecondDerivative(Equation):
         dstart_indx = d_idx * dimsq
         sstart_indx = s_idx * dimsq
         mbbyrhob = s_m[s_idx] / s_rho[s_idx]
+        for blk in range(dim):
+            for row in range(dim):
+                for col in range(dim):
+                    dblkrowcol = dstart_indx * dim + blk * dimsq + row * dim + col
+                    dvij = d_dvaux[dstart_indx + blk * dim + row] - \
+                           s_dvaux[sstart_indx + blk * dim + row]
+                    d_ddv[dblkrowcol] += mbbyrhob * dvij * XIJ[col] * WI
+
+    def post_loop(self, d_idx, d_dv, d_divv, d_cm, d_ddv):
+        ddvpre = declare('matrix(27)')
+        ddvpreb, ddvblk, cm = declare('matrix(9)', 3)
+        dstart_indx, row, col, rowcol, dim, dimsq = declare('int', 6)
+        blk, blkrowcol, dblkrowcol, ddstart_indx = declare('int', 4)
+        dim = self.dim
+        dimsq = self.dimsq
+        dstart_indx = dimsq * d_idx
+        ddstart_indx = dstart_indx * dim
 
         for blk in range(dim):
             for row in range(dim):
                 for col in range(dim):
                     rowcol = row * dim + col
-                    drowcol = dstart_indx + rowcol
-                    srowcol = sstart_indx + rowcol
-                    dblkrowcol = dstart_indx * dim + blk * dimsq + rowcol
-                    dvij = d_dvaux[drowcol] - s_dvaux[srowcol]
-                    d_ddv[dblkrowcol] += mbbyrhob * dvij * XIJ[blk] * WI
-
-    def post_loop(self, d_idx, d_dv, d_divv, d_cm, d_ddv):
-        ddv, ddvpre = declare('matrix(27)', 2)
-        ddvpreb, ddvb, cm = declare('matrix(9)', 3)
-        dstart_indx, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
-        blk, blkrowcol, dblkrowcol, ddstart_indx = declare('int', 4)
-
-        dim = self.dim
-        dimsq = self.dimsq
-        dstart_indx = dimsq * d_idx
-        ddstart_indx = dstart_indx * dimsq
-
-        for blk in range(dim):
-            for row in range(dim):
-                for col in range(dim):
-                    blkrowcol = blk * dimsq + row * dim + col
-                    dblkrowcol = dstart_indx * dim + blkrowcol
+                    blkrowcol = blk * dimsq + rowcol
+                    dblkrowcol = ddstart_indx + blkrowcol
                     ddvpre[blkrowcol] = d_ddv[dblkrowcol]
-                    cm[rowcol] = d_cm[drowcol]
+                    cm[rowcol] = d_cm[dstart_indx + rowcol]
 
         for blk in range(dim):
             for row in range(dim):
@@ -571,12 +569,12 @@ class SecondDerivative(Equation):
                     rowcol = row * dim + col
                     blkrowcol = blk * dimsq + rowcol
                     ddvpreb[rowcol] = ddvpre[blkrowcol]
-            mat_mult(cm, ddvpreb, dim, ddvb)
+            mat_mult(cm, ddvpreb, dim, ddvblk)
             for row in range(dim):
                 for col in range(dim):
                     rowcol = row * dim + col
                     dblkrowcol = ddstart_indx + blk * dimsq + rowcol
-                    d_ddv[dblkrowcol] = ddvb[rowcol]
+                    d_ddv[dblkrowcol] = ddvblk[rowcol]
 
 
 class BalsaraSwitch(Equation):
@@ -737,7 +735,7 @@ class MomentumAndEnergyMI1(Equation):
 
         scm, dcm, idmat = declare('matrix(9)', 3)
         gmi, gmj, etai, etaj, vij, mpinc = declare('matrix(3)', 6)
-        dvdel, ddvdeldel= declare('matrix(3)', 2)
+        dvdel, ddvdeldel = declare('matrix(3)', 2)
         dstart_indx, sstart_indx, row, col, blk = declare('int', 5)
         rowcol, drowcol, srowcol, dim, dimsq = declare('int', 5)
         dim = self.dim
@@ -788,13 +786,15 @@ class MomentumAndEnergyMI1(Equation):
                 for blk in range(dim):
                     rowcol = row * dim + col
                     ddvdeldel[row] += (
-                        d_ddv[dstart_indx * dim + blk * dimsq + rowcol] +
-                        s_ddv[sstart_indx * dim + blk * dimsq + rowcol]
-                        ) * mpinc[col] * mpinc[blk]
+                                              d_ddv[
+                                                  dstart_indx * dim + blk * dimsq + rowcol] +
+                                              s_ddv[
+                                                  sstart_indx * dim + blk * dimsq + rowcol]
+                                      ) * mpinc[col] * mpinc[blk]
 
-        vij[0] = VIJ[0] + phiij * (dvdel[0])# + 0.5 * ddvdeldel[0])
-        vij[1] = VIJ[1] + phiij * (dvdel[1])# + 0.5 * ddvdeldel[1])
-        vij[2] = VIJ[2] + phiij * (dvdel[2])# + 0.5 * ddvdeldel[2])
+        vij[0] = VIJ[0] + phiij * (dvdel[0])  # + 0.5 * ddvdeldel[0])
+        vij[1] = VIJ[1] + phiij * (dvdel[1])  # + 0.5 * ddvdeldel[1])
+        vij[2] = VIJ[2] + phiij * (dvdel[2])  # + 0.5 * ddvdeldel[2])
 
         # print(d_idx, s_idx, VIJ[0], vij[0], ddvdeldel[0])
 
@@ -918,9 +918,9 @@ class UpdateGhostProps(Equation):
         assert GHOST_TAG == 2
 
     def initialize(self, d_idx, d_orig_idx, d_p, d_tag, d_h, d_rho, d_dndh,
-                   d_n, d_cm):
+                   d_n, d_cm, d_dv, d_dvaux, d_ddv):
         idx, dim, dimsq = declare('int', 3)
-        row, col, rowcol, drowcol, dstart_indx, start_indx = declare('int', 6)
+        row, col, rowcol, blkrowcol, dstart_indx, start_indx = declare('int', 6)
         if d_tag[d_idx] == 2:
             idx = d_orig_idx[d_idx]
             d_p[d_idx] = d_p[idx]
@@ -936,6 +936,16 @@ class UpdateGhostProps(Equation):
                 for col in range(dim):
                     rowcol = row * dim + col
                     d_cm[dstart_indx + rowcol] = d_cm[start_indx + rowcol]
+                    d_dv[dstart_indx + rowcol] = d_dv[start_indx + rowcol]
+                    d_dvaux[dstart_indx + rowcol] = d_dvaux[start_indx + rowcol]
+
+            for blk in range(dim):
+                for row in range(dim):
+                    for col in range(dim):
+                        blkrowcol = blk * dimsq + row * dim + col
+                        d_ddv[dim * dstart_indx + blkrowcol] = \
+                            d_cm[dim * start_indx + blkrowcol]
+
 
 
 class PECStep(IntegratorStep):
