@@ -401,7 +401,6 @@ class AuxillaryGradient(Equation):
 
     def initialize(self, d_dvaux, d_idx, d_invdm):
         dstart_indx, i, dim, dimsq = declare('int', 4)
-        dim = self.dim
         dimsq = self.dimsq
         dstart_indx = dimsq * d_idx
 
@@ -423,12 +422,12 @@ class AuxillaryGradient(Equation):
 
     def post_loop(self, d_idx, d_dv, d_divv, d_invdm, d_dvaux):
         dstart_indx, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
+        invdm, idmat, dvaux, dvauxpre, dm = declare('matrix(9)', 5)
+        auginvdm = declare('matrix(18)')
+
         dim = self.dim
         dimsq = dim * dim
         dstart_indx = dimsq * d_idx
-
-        invdm, idmat, dvaux, dvauxpre, dm = declare('matrix(9)', 5)
-        identity(idmat, dim)
 
         for row in range(dim):
             for col in range(dim):
@@ -437,7 +436,7 @@ class AuxillaryGradient(Equation):
                 dvauxpre[rowcol] = d_dvaux[drowcol]
                 invdm[rowcol] = d_invdm[drowcol]
 
-        auginvdm = declare('matrix(18)')
+        identity(idmat, dim)
         augmented_matrix(invdm, idmat, dim, dim, dim, auginvdm)
         gj_solve(auginvdm, dim, dim, dm)
         mat_mult(dm, dvauxpre, dim, dvaux)
@@ -447,7 +446,6 @@ class AuxillaryGradient(Equation):
                 rowcol = row * dim + col
                 drowcol = dstart_indx + rowcol
                 d_dvaux[drowcol] = dvaux[rowcol]
-
 
 class VelocityGradDivC1(Equation):
     def __init__(self, dest, sources, dim):
@@ -525,8 +523,8 @@ class SecondDerivative(Equation):
         dstart_indx, i, dim, dimsq = declare('int', 4)
         dimsq = self.dimsq
         dstart_indx = dimsq * d_idx
-        for i in range(dimsq):
-            d_ddv[dstart_indx + i] = 0.0
+        for i in range(dimsq*dim):
+            d_ddv[dstart_indx*dim + i] = 0.0
 
     def loop(self, d_idx, VIJ, XIJ, d_dvaux, s_dvaux, WI, d_ddv,
              s_m, s_rho, s_idx):
@@ -546,7 +544,7 @@ class SecondDerivative(Equation):
                     srowcol = sstart_indx + rowcol
                     dblkrowcol = dstart_indx * dim + blk * dimsq + rowcol
                     dvij = d_dvaux[drowcol] - s_dvaux[srowcol]
-                    d_ddv[dblkrowcol] += mbbyrhob * dvij * XIJ[col] * WI
+                    d_ddv[dblkrowcol] += mbbyrhob * dvij * XIJ[blk] * WI
 
     def post_loop(self, d_idx, d_dv, d_divv, d_cm, d_ddv):
         ddv, ddvpre = declare('matrix(27)', 2)
@@ -723,7 +721,7 @@ class MomentumAndEnergyMI1(Equation):
              d_au, d_av, d_aw, d_ae, XIJ, VIJ, HIJ, d_alpha, s_alpha,
              R2IJ, RHOIJ1, d_h, d_dndh, d_n, d_drhosumdh, s_h, s_dndh, s_n,
              s_drhosumdh, d_cm, s_cm, WI, WJ, d_u, d_v, d_w, s_u, s_v,
-             s_w, d_dv, s_dv):
+             s_w, d_dv, s_dv, d_ddv, s_ddv):
 
         # TODO: Make eps a parameter
         eps = 0.01
@@ -737,9 +735,10 @@ class MomentumAndEnergyMI1(Equation):
         # averaged sound speed
         cij = 0.5 * (d_cs[d_idx] + s_cs[s_idx])
 
-        scm, dcm, idmat, dvdeli, dvdelj, vir, vjr, dvdel = declare('matrix(9)',8)
-        gmi, gmj, etai, etaj, avi, vij = declare('matrix(3)', 6)
-        dstart_indx, sstart_indx, row, col = declare('int', 4)
+        scm, dcm, idmat = declare('matrix(9)', 3)
+        gmi, gmj, etai, etaj, vij, mpinc = declare('matrix(3)', 6)
+        dvdel, ddvdeldel= declare('matrix(3)', 2)
+        dstart_indx, sstart_indx, row, col, blk = declare('int', 5)
         rowcol, drowcol, srowcol, dim, dimsq = declare('int', 5)
         dim = self.dim
         dimsq = self.dimsq
@@ -747,9 +746,8 @@ class MomentumAndEnergyMI1(Equation):
         sstart_indx = dimsq * s_idx
 
         for row in range(dim):
-            gmi[row] = 0
-            gmj[row] = 0
-            avi[row] = 0
+            gmi[row] = 0.0
+            gmj[row] = 0.0
             etai[row] = XIJ[row] / hi
             etaj[row] = XIJ[row] / hj
 
@@ -762,38 +760,51 @@ class MomentumAndEnergyMI1(Equation):
         aaden = 0.0
         for row in range(dim):
             for col in range(dim):
-                aanum += d_dv[dim * dim * d_idx + dim * row + col] * XIJ[row] * \
-                         XIJ[col]
-                aaden += s_dv[dim * dim * s_idx + dim * row + col] * XIJ[row] * \
-                         XIJ[col]
+                rowcol = row * dim + col
+                aanum += d_dv[dstart_indx + rowcol] * XIJ[row] * XIJ[col]
+                aaden += s_dv[sstart_indx + rowcol] * XIJ[row] * XIJ[col]
         aaij = aanum / aaden
 
         phiijin = min(1, 4 * aaij / ((1 + aaij) * (1 + aaij)))
         phiij = max(0, phiijin)
-        etaij = sqrt(min(etaisq, etajsq))
 
         if etaij < self.eta_crit:
             powin = (etaij - self.eta_crit) / self.eta_fold
             phiij = phiij * exp(-powin * powin)
 
         for row in range(dim):
+            mpinc[row] = 0.5 * XIJ[row]
+
+        for row in range(dim):
             dvdel[row] = 0.0
             for col in range(dim):
-                dvdel[row] -= (d_dv[dim * dim * d_idx + dim * row + col] +
-                               s_dv[dim * dim * s_idx + dim * row + col]) * \
-                              0.5 * XIJ[col]
+                rowcol = row * dim + col
+                dvdel[row] -= (d_dv[dstart_indx + rowcol] +
+                               s_dv[sstart_indx + rowcol]) * mpinc[col]
 
-        vij[0] = VIJ[0] + phiij * dvdel[0]
-        vij[1] = VIJ[1] + phiij * dvdel[1]
-        vij[2] = VIJ[2] + phiij * dvdel[2]
+        for row in range(dim):
+            ddvdeldel[row] = 0.0
+            for col in range(dim):
+                for blk in range(dim):
+                    rowcol = row * dim + col
+                    ddvdeldel[row] += (
+                        d_ddv[dstart_indx * dim + blk * dimsq + rowcol] +
+                        s_ddv[sstart_indx * dim + blk * dimsq + rowcol]
+                        ) * mpinc[col] * mpinc[blk]
+
+        vij[0] = VIJ[0] + phiij * (dvdel[0])# + 0.5 * ddvdeldel[0])
+        vij[1] = VIJ[1] + phiij * (dvdel[1])# + 0.5 * ddvdeldel[1])
+        vij[2] = VIJ[2] + phiij * (dvdel[2])# + 0.5 * ddvdeldel[2])
+
+        # print(d_idx, s_idx, VIJ[0], vij[0], ddvdeldel[0])
 
         mui = min(0, dot(vij, etai, dim) / (etaisq + epssq))
         muj = min(0, dot(vij, etaj, dim) / (etajsq + epssq))
 
-        Qi = d_rho[d_idx] * (-d_alpha[d_idx] * d_cs[d_idx] * mui +
-                             beta * mui * mui)
-        Qj = s_rho[s_idx] * (-s_alpha[s_idx] * s_cs[s_idx] * muj +
-                             beta * muj * muj)
+        Qi = d_rho[d_idx] * mui * (-d_alpha[d_idx] * d_cs[d_idx] +
+                                   beta * mui)
+        Qj = s_rho[s_idx] * muj * (-s_alpha[s_idx] * s_cs[s_idx] +
+                                   beta * muj)
 
         for row in range(dim):
             for col in range(dim):
