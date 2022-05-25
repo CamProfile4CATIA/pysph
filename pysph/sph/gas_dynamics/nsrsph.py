@@ -844,6 +844,7 @@ class MomentumAndEnergyMI1(Equation):
         aanum = 0.0
         aaden = 0.0
         for row in range(dim):
+            mpinc[row] = 0.5 * XIJ[row]
             for col in range(dim):
                 rowcol = row * dim + col
                 aanum += d_dv[dstart_indx + rowcol] * XIJ[row] * XIJ[col]
@@ -856,9 +857,6 @@ class MomentumAndEnergyMI1(Equation):
         if etaij < self.eta_crit:
             powin = (etaij - self.eta_crit) / self.eta_fold
             phiij = phiij * exp(-powin * powin)
-
-        for row in range(dim):
-            mpinc[row] = 0.5 * XIJ[row]
 
         for row in range(dim):
             dvdel[row] = 0.0
@@ -914,7 +912,7 @@ class MomentumAndEnergyMI1(Equation):
         d_aw[d_idx] -= mj * (pibrhoi2 * gmi[2] + pjbrhoj2 * gmj[2])
 
         # accelerations for the thermal energy
-        vijdotdwi = VIJ[0] * gmi[0] + VIJ[1] * gmi[1] + VIJ[2] * gmi[2]
+        vijdotdwi = dot(VIJ, gmi, dim)
         d_ae[d_idx] += mj * pibrhoi2 * vijdotdwi
 
 
