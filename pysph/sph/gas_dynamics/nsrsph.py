@@ -749,7 +749,7 @@ class MomentumAndEnergyMI1(Equation):
         return [mat_vec_mult, dot]
 
     def __init__(self, dest, sources, dim, fkern, eta_crit=0.3, eta_fold=0.2,
-                 beta=2.0):
+                 beta=2.0, alphac = 0.05):
         r"""
         Momentum and Energy Equations with artificial viscosity.
 
@@ -792,6 +792,7 @@ class MomentumAndEnergyMI1(Equation):
         self.dimsq = dim * dim
         self.eta_crit = eta_crit
         self.eta_fold = eta_fold
+        self.alphac = alphac
         super().__init__(dest, sources)
 
     def initialize(self, d_idx, d_au, d_av, d_aw, d_ae):
@@ -806,7 +807,8 @@ class MomentumAndEnergyMI1(Equation):
              d_au, d_av, d_aw, d_ae, XIJ, VIJ, HIJ, d_alpha, s_alpha,
              R2IJ, RHOIJ1, d_h, d_dndh, d_n, d_drhosumdh, s_h, s_dndh, s_n,
              s_drhosumdh, d_cm, s_cm, WI, WJ, d_u, d_v, d_w, s_u, s_v,
-             s_w, d_dv, s_dv, d_ddv, s_ddv):
+             s_w, d_dv, s_dv, d_ddv, s_ddv, d_de, s_de, d_dde, s_dde, d_e,
+             s_e):
 
         # TODO: Make eps a parameter
         eps = 0.01
@@ -858,16 +860,20 @@ class MomentumAndEnergyMI1(Equation):
             powin = (etaij - self.eta_crit) / self.eta_fold
             phiij = phiij * exp(-powin * powin)
 
+        dedel = 0.0
+        ddedel=0.0
         for row in range(dim):
+            ddvdeldel[row] = 0.0
             dvdel[row] = 0.0
+            dedel -= (d_de[d_idx*dim + row] +
+                      s_de[s_idx * dim + row]) * mpinc[col]
             for col in range(dim):
                 rowcol = row * dim + col
                 dvdel[row] -= (d_dv[dstart_indx + rowcol] +
                                s_dv[sstart_indx + rowcol]) * mpinc[col]
-
-        for row in range(dim):
-            ddvdeldel[row] = 0.0
-            for col in range(dim):
+                ddedel += (d_dde[dstart_indx + rowcol] -
+                           s_dde[sstart_indx + rowcol]
+                           ) * mpinc[row] * mpinc[col]
                 for blk in range(dim):
                     rowcol = row * dim + col
                     ddvdeldel[row] += (
@@ -878,6 +884,11 @@ class MomentumAndEnergyMI1(Equation):
         vij[0] = VIJ[0] + phiij * (dvdel[0] + 0.5 * ddvdeldel[0])
         vij[1] = VIJ[1] + phiij * (dvdel[1] + 0.5 * ddvdeldel[1])
         vij[2] = VIJ[2] + phiij * (dvdel[2] + 0.5 * ddvdeldel[2])
+
+        eij = d_e[d_idx] - s_e[s_idx] + phiij * (dedel + 0.5 * ddedel)
+        rhoij = 0.5 * (s_rho[s_idx] + d_rho[d_idx])
+        pij = d_rho[d_idx] - s_rho[s_idx]
+        vsigng = sqrt(abs(pij)/rhoij)
 
 
         mui = min(0, dot(vij, etai, dim) / (etaisq + epssq))
@@ -913,6 +924,11 @@ class MomentumAndEnergyMI1(Equation):
 
         # accelerations for the thermal energy
         vijdotdwi = dot(VIJ, gmi, dim)
+        normgmij = sqrt((gmi[0] + gmj[0])*(gmi[0] + gmj[0]) +
+                        (gmi[0] + gmj[0])*(gmi[0] + gmj[0]) +
+                        (gmi[0] + gmj[0])*(gmi[0] + gmj[0]))
+
+        d_ae[d_idx] -= 0.5 * self.alphac * mj * vsigng * eij * normgmij
         d_ae[d_idx] += mj * pibrhoi2 * vijdotdwi
 
 
