@@ -21,7 +21,7 @@ References
         (2020): 4230-4255. https://doi.org/10.1093/mnras/staa2591.
 
 """
-from compyle.types import declare
+from compyle.types import declare, annotate
 from pysph.base.particle_array import get_ghost_tag
 
 from pysph.sph.equation import Equation
@@ -37,7 +37,7 @@ class NSRSPHScheme(Scheme):
     def __init__(self, fluids, solids, dim, gamma, hfact, beta=2.0, fkern=1.0,
                  max_density_iterations=250, alphamax=1.0,
                  density_iteration_tolerance=1e-3, has_ghosts=False,
-                 eta_crit=0.3, eta_fold=0.2):
+                 eta_crit=0.3, eta_fold=0.2, adaptive_h_scheme='magma2'):
         """
         Newtonian limit of Rosswog's special-relativistic SPH.
 
@@ -104,6 +104,7 @@ class NSRSPHScheme(Scheme):
         self.density_iteration_tolerance = density_iteration_tolerance
         self.max_density_iterations = max_density_iterations
         self.has_ghosts = has_ghosts
+        self.adaptive_h_scheme = adaptive_h_scheme
         self.fkern = fkern
         self.alphamax = alphamax
         self.eta_crit = eta_crit
@@ -130,9 +131,9 @@ class NSRSPHScheme(Scheme):
     def configure_solver(self, kernel=None, integrator_cls=None,
                          extra_steppers=None, **kw):
 
-        from pysph.base.kernels import QuinticSpline
+        from pysph.base.kernels import Gaussian
         if kernel is None:
-            kernel = QuinticSpline(dim=self.dim)
+            kernel = Gaussian(dim=self.dim)
 
         if hasattr(kernel, 'fkern'):
             self.fkern = kernel.fkern
@@ -164,14 +165,30 @@ class NSRSPHScheme(Scheme):
         equations = []
 
         # Find the optimal 'h'
-        g1 = []
+
+        if self.adaptive_h_scheme == "magma2":
+            g1p0 = []
+            for fluid in self.fluids:
+                g1p0.append(IncreaseSmoothingLength(dest=fluid, sources=None))
+            equations.append(Group(equations=g1p0))
+
+            g1p1 = []
+            for fluid in self.fluids:
+                g1p1.append(UpdateSmoothingLength(dest=fluid, sources=all_pa))
+            equations.append(Group(equations=g1p1))
+            ioo = True
+
+        else:
+            ioo = False
+
+        g1p2 = []
         for fluid in self.fluids:
-            g1.append(SummationDensity(
+            g1p2.append(SummationDensity(
                 dest=fluid, sources=all_pa, hfact=self.hfact,
-                density_iterations=True, dim=self.dim,
+                density_iterations=True, dim=self.dim, iterate_only_once=ioo,
                 htol=self.density_iteration_tolerance))
             equations.append(Group(
-                equations=g1, update_nnps=True, iterate=True,
+                equations=g1p2, update_nnps=True, iterate=True,
                 max_iterations=self.max_density_iterations))
 
         g2 = []
@@ -217,6 +234,7 @@ class NSRSPHScheme(Scheme):
                                            fkern=self.fkern,
                                            eta_crit=self.eta_crit,
                                            eta_fold=self.eta_fold))
+
         equations.append(Group(equations=g5))
 
         return equations
@@ -253,6 +271,28 @@ class NSRSPHScheme(Scheme):
             pa = particle_arrays[solid]
             self._ensure_properties(pa, solid_props, clean)
             pa.set_output_arrays(output_props)
+
+
+class UpdateSmoothingLength(Equation):
+    def _get_helpers_(self):
+        return [quicksort]
+
+    def loop_all(self, d_idx, d_x, d_y, d_z, d_rho, d_h,
+                 s_m, s_x, s_y, s_z, s_h, NBRS, N_NBRS, SPH_KERNEL):
+        i = declare('int')
+        s_idx = declare('long')
+        xij = declare('matrix(3)')
+        rij = declare('matrix(500)')
+        nidx = declare('matrix(500, "long")')
+        for i in range(N_NBRS):
+            s_idx = NBRS[i]
+            xij[0] = d_x[d_idx] - s_x[s_idx]
+            xij[1] = d_y[d_idx] - s_y[s_idx]
+            xij[2] = d_z[d_idx] - s_z[s_idx]
+            rij[i] = sqrt(xij[0] * xij[0] + xij[1] * xij[1] + xij[2] * xij[2])
+            nidx[i] = s_idx
+        quicksort(nidx, rij, 0, N_NBRS)
+        d_h[d_idx] = rij[6] / SPH_KERNEL.radius_scale
 
 
 class SummationDensity(Equation):
@@ -446,6 +486,7 @@ class AuxillaryGradient(Equation):
                 rowcol = row * dim + col
                 drowcol = dstart_indx + rowcol
                 d_dvaux[drowcol] = dvaux[rowcol]
+
 
 class FirstGradient(Equation):
     def __init__(self, dest, sources, dim):
@@ -785,12 +826,12 @@ class MomentumAndEnergyMI1(Equation):
             for col in range(dim):
                 for blk in range(dim):
                     rowcol = row * dim + col
-                    ddvdeldel[row] += (
-                                              d_ddv[
-                                                  dstart_indx * dim + blk * dimsq + rowcol] +
-                                              s_ddv[
-                                                  sstart_indx * dim + blk * dimsq + rowcol]
-                                      ) * mpinc[col] * mpinc[blk]
+                    ddvdeldel[row] += \
+                        (
+                                d_ddv[
+                                    dstart_indx * dim + blk * dimsq + rowcol] +
+                                s_ddv[sstart_indx * dim + blk * dimsq + rowcol]
+                        ) * mpinc[col] * mpinc[blk]
 
         vij[0] = VIJ[0] + phiij * (dvdel[0])  # + 0.5 * ddvdeldel[0])
         vij[1] = VIJ[1] + phiij * (dvdel[1])  # + 0.5 * ddvdeldel[1])
@@ -832,6 +873,11 @@ class MomentumAndEnergyMI1(Equation):
         # accelerations for the thermal energy
         vijdotdwi = VIJ[0] * gmi[0] + VIJ[1] * gmi[1] + VIJ[2] * gmi[2]
         d_ae[d_idx] += mj * pibrhoi2 * vijdotdwi
+
+
+class IncreaseSmoothingLength(Equation):
+    def post_loop(self, d_idx, d_h):
+        d_h[d_idx] *= 1.10
 
 
 class WallBoundary(Equation):
@@ -919,8 +965,8 @@ class UpdateGhostProps(Equation):
 
     def initialize(self, d_idx, d_orig_idx, d_p, d_tag, d_h, d_rho, d_dndh,
                    d_n, d_cm, d_dv, d_dvaux, d_ddv):
-        idx, dim, dimsq = declare('int', 3)
-        row, col, rowcol, blkrowcol, dstart_indx, start_indx = declare('int', 6)
+        idx, dim, dimsq, row, col, rowcol = declare('int', 6)
+        blkrowcol, dstart_indx, start_indx = declare('int', 3)
         if d_tag[d_idx] == 2:
             idx = d_orig_idx[d_idx]
             d_p[d_idx] = d_p[idx]
@@ -937,7 +983,8 @@ class UpdateGhostProps(Equation):
                     rowcol = row * dim + col
                     d_cm[dstart_indx + rowcol] = d_cm[start_indx + rowcol]
                     d_dv[dstart_indx + rowcol] = d_dv[start_indx + rowcol]
-                    d_dvaux[dstart_indx + rowcol] = d_dvaux[start_indx + rowcol]
+                    d_dvaux[dstart_indx + rowcol] = d_dvaux[
+                        start_indx + rowcol]
 
             for blk in range(dim):
                 for row in range(dim):
@@ -945,7 +992,6 @@ class UpdateGhostProps(Equation):
                         blkrowcol = blk * dimsq + row * dim + col
                         d_ddv[dim * dstart_indx + blkrowcol] = \
                             d_cm[dim * start_indx + blkrowcol]
-
 
 
 class PECStep(IntegratorStep):
@@ -1006,3 +1052,36 @@ class PECStep(IntegratorStep):
 
         # Update densities and smoothing lengths from the accelerations
         d_e[d_idx] = d_e0[d_idx] + dt * d_ae[d_idx]
+
+
+@annotate(fst='int', lst='int', key='doublep', arr='longp')
+def quicksort(arr, key, fst=0, lst=3):
+    '''
+    Sort in-place with QuickSort
+
+    :param key:  the list of numbers to sort
+    :param fst: the first index from xs to begin sorting from,
+                must be in the range [0, len(arr))
+    :param lst: the last index from xs to stop sorting at
+                must be in the range [fst, len(arr))
+    :return:    nothing, the side effect is that arr[fst, lst] is sorted
+    '''
+    i, j = declare('int', 2)
+    if fst >= lst:
+        return
+
+    i, j = fst, lst
+    pivot = key[lst]
+
+    while i <= j:
+        while key[i] < pivot:
+            i += 1
+        while key[j] > pivot:
+            j -= 1
+
+        if i <= j:
+            key[i], key[j] = key[j], key[i]
+            arr[i], arr[j] = arr[j], arr[i]
+            i, j = i + 1, j - 1
+    quicksort(arr, key, fst, j)
+    quicksort(arr, key, i, lst)
