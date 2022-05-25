@@ -37,7 +37,7 @@ class NSRSPHScheme(Scheme):
     def __init__(self, fluids, solids, dim, gamma, hfact, beta=2.0, fkern=1.0,
                  max_density_iterations=250, alphamax=1.0,
                  density_iteration_tolerance=1e-3, has_ghosts=False,
-                 eta_crit=0.3, eta_fold=0.2, adaptive_h_scheme='magma2'):
+                 eta_crit=0.3, eta_fold=0.2, adaptive_h_scheme='mpm'):
         """
         Newtonian limit of Rosswog's special-relativistic SPH.
 
