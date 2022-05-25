@@ -991,7 +991,7 @@ class UpdateGhostProps(Equation):
                     for col in range(dim):
                         blkrowcol = blk * dimsq + row * dim + col
                         d_ddv[dim * dstart_indx + blkrowcol] = \
-                            d_cm[dim * start_indx + blkrowcol]
+                            d_ddv[dim * start_indx + blkrowcol]
 
 
 class PECStep(IntegratorStep):
