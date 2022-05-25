@@ -292,7 +292,7 @@ class UpdateSmoothingLength(Equation):
             rij[i] = sqrt(xij[0] * xij[0] + xij[1] * xij[1] + xij[2] * xij[2])
             nidx[i] = s_idx
         quicksort(nidx, rij, 0, N_NBRS)
-        d_h[d_idx] = rij[6] / SPH_KERNEL.radius_scale
+        d_h[d_idx] = rij[10] / SPH_KERNEL.radius_scale
 
 
 class SummationDensity(Equation):
@@ -826,18 +826,15 @@ class MomentumAndEnergyMI1(Equation):
             for col in range(dim):
                 for blk in range(dim):
                     rowcol = row * dim + col
-                    ddvdeldel[row] += \
-                        (
-                                d_ddv[
-                                    dstart_indx * dim + blk * dimsq + rowcol] +
-                                s_ddv[sstart_indx * dim + blk * dimsq + rowcol]
+                    ddvdeldel[row] += (
+                        d_ddv[dstart_indx * dim + blk * dimsq + rowcol] -
+                        s_ddv[sstart_indx * dim + blk * dimsq + rowcol]
                         ) * mpinc[col] * mpinc[blk]
 
-        vij[0] = VIJ[0] + phiij * (dvdel[0])  # + 0.5 * ddvdeldel[0])
-        vij[1] = VIJ[1] + phiij * (dvdel[1])  # + 0.5 * ddvdeldel[1])
-        vij[2] = VIJ[2] + phiij * (dvdel[2])  # + 0.5 * ddvdeldel[2])
+        vij[0] = VIJ[0] + phiij * (dvdel[0] + 0.5 * ddvdeldel[0])
+        vij[1] = VIJ[1] + phiij * (dvdel[1] + 0.5 * ddvdeldel[1])
+        vij[2] = VIJ[2] + phiij * (dvdel[2] + 0.5 * ddvdeldel[2])
 
-        # print(d_idx, s_idx, VIJ[0], vij[0], ddvdeldel[0])
 
         mui = min(0, dot(vij, etai, dim) / (etaisq + epssq))
         muj = min(0, dot(vij, etaj, dim) / (etajsq + epssq))
