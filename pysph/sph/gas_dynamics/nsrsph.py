@@ -262,6 +262,9 @@ class NSRSPHScheme(Scheme):
             pa.add_property('invdm', stride=9)
             pa.add_property('cm', stride=9)
             pa.add_property('ddv', stride=27)
+            pa.add_property('de', stride=3)
+            pa.add_property('dde', stride=9)
+            pa.add_property('deaux', stride=3)
             nfp = pa.get_number_of_particles()
             pa.orig_idx[:] = numpy.arange(nfp)
             pa.set_output_arrays(output_props)
@@ -437,39 +440,46 @@ class AuxillaryGradient(Equation):
         super().__init__(dest, sources)
 
     def _get_helpers_(self):
-        return [mat_mult, augmented_matrix, identity, gj_solve]
+        return [mat_mult, augmented_matrix, identity, gj_solve, mat_vec_mult]
 
-    def initialize(self, d_dvaux, d_idx, d_invdm):
+    def initialize(self, d_dvaux, d_idx, d_invdm, d_deaux):
         dstart_indx, i, dim, dimsq = declare('int', 4)
         dimsq = self.dimsq
+        dim = self.dim
         dstart_indx = dimsq * d_idx
+        for i in range(dim):
+            d_deaux[dim * d_idx + i] = 0.0
 
         for i in range(dimsq):
             d_dvaux[dstart_indx + i] = 0.0
             d_invdm[dstart_indx + i] = 0.0
 
     def loop(self, d_idx, VIJ, XIJ, d_invdm, DWI, d_dvaux,
-             s_m, s_idx):
+             s_m, s_idx, d_deaux, d_e, s_e):
         dstart_indx, row, col, drowcol, dim, dimsq = declare('int', 6)
         dim = self.dim
         dimsq = self.dimsq
         dstart_indx = d_idx * dimsq
+        eij = d_e[d_idx] - s_e[s_idx]
         for row in range(dim):
+            d_deaux[d_idx * dim + row] += s_m[s_idx] * eij * DWI[row]
             for col in range(dim):
                 drowcol = dstart_indx + row * dim + col
                 d_dvaux[drowcol] += s_m[s_idx] * VIJ[row] * DWI[col]
                 d_invdm[drowcol] += s_m[s_idx] * XIJ[row] * DWI[col]
 
-    def post_loop(self, d_idx, d_dv, d_divv, d_invdm, d_dvaux):
+    def post_loop(self, d_idx, d_dv, d_divv, d_invdm, d_dvaux, d_deaux):
         dstart_indx, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
         invdm, idmat, dvaux, dvauxpre, dm = declare('matrix(9)', 5)
         auginvdm = declare('matrix(18)')
+        deauxpre, deaux = declare('matrix(3)', 2)
 
         dim = self.dim
         dimsq = dim * dim
         dstart_indx = dimsq * d_idx
 
         for row in range(dim):
+            deauxpre[row] = d_deaux[dim * d_idx + row]
             for col in range(dim):
                 rowcol = row * dim + col
                 drowcol = dstart_indx + rowcol
@@ -480,8 +490,10 @@ class AuxillaryGradient(Equation):
         augmented_matrix(invdm, idmat, dim, dim, dim, auginvdm)
         gj_solve(auginvdm, dim, dim, dm)
         mat_mult(dm, dvauxpre, dim, dvaux)
+        mat_vec_mult(dm, deauxpre, dim, deaux)
 
         for row in range(dim):
+            d_deaux[d_idx * dim + row] = deaux[row]
             for col in range(dim):
                 rowcol = row * dim + col
                 drowcol = dstart_indx + rowcol
@@ -498,40 +510,46 @@ class FirstGradient(Equation):
         super().__init__(dest, sources)
 
     def _get_helpers_(self):
-        return [mat_mult]
+        return [mat_mult, mat_vec_mult]
 
-    def initialize(self, d_dv, d_idx, d_divv):
+    def initialize(self, d_dv, d_idx, d_divv, d_de):
         dstart_indx, i, dim, dimsq = declare('int', 4)
         dim = self.dim
         dimsq = self.dimsq
         dstart_indx = dimsq * d_idx
+
+        for i in range(dim):
+            d_de[dim * d_idx + i] = 0.0
 
         for i in range(dimsq):
             d_dv[dstart_indx + i] = 0.0
         d_divv[d_idx] = 0.0
 
     def loop(self, d_idx, VIJ, XIJ, d_dv, WI,
-             s_m, s_rho, s_idx):
+             s_m, s_rho, s_idx, d_e, s_e, d_de):
         dstart_indx, row, col, drowcol, dim, dimsq = declare('int', 6)
         dim = self.dim
         dimsq = self.dimsq
         dstart_indx = d_idx * dimsq
         mbbyrhob = s_m[s_idx] / s_rho[s_idx]
+        eij = d_e[d_idx] - s_e[s_idx]
         for row in range(dim):
+            d_de[d_idx * dim + row] += mbbyrhob * eij * XIJ[row] * WI
             for col in range(dim):
                 drowcol = dstart_indx + row * dim + col
                 d_dv[drowcol] += mbbyrhob * VIJ[row] * XIJ[col] * WI
 
-    def post_loop(self, d_idx, d_dv, d_divv, d_cm):
+    def post_loop(self, d_idx, d_dv, d_divv, d_cm, d_de):
         dv, dvpre, cm = declare('matrix(9)', 3)
 
         dstart_indx, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
-
+        depre, de= declare('matrix(3)', 2)
         dim = self.dim
         dimsq = dim * dim
         dstart_indx = dimsq * d_idx
 
         for row in range(dim):
+            depre[row] = d_de[dim * d_idx + row]
             for col in range(dim):
                 rowcol = row * dim + col
                 drowcol = dstart_indx + rowcol
@@ -539,9 +557,11 @@ class FirstGradient(Equation):
                 cm[rowcol] = d_cm[drowcol]
 
         mat_mult(cm, dvpre, dim, dv)
+        mat_vec_mult(cm, depre, dim, de)
 
         for row in range(dim):
             d_divv[d_idx] += dv[row * dim + row]
+            d_de[d_idx * dim + row] = de[row]
             for col in range(dim):
                 rowcol = row * dim + col
                 drowcol = dstart_indx + rowcol
@@ -560,16 +580,21 @@ class SecondGradient(Equation):
     def _get_helpers_(self):
         return [mat_mult]
 
-    def initialize(self, d_ddv, d_idx, d_divv):
+    def initialize(self, d_ddv, d_idx, d_divv, d_dde):
         ddstart_indx, i, dim, dimcu, blk, row, col = declare('int', 7)
+        dstart_indx, dimsq = declare('int', 2)
         dim = self.dim
+        dimsq = dim*dim
         dimcu = dim * dim * dim
+        dstart_indx = dimsq * d_idx
         ddstart_indx = dimcu * d_idx
         for i in range(dimcu):
             d_ddv[ddstart_indx + i] = 0.0
+        for i in range(dimsq):
+            d_dde[dstart_indx + i] = 0.0
 
     def loop(self, d_idx, VIJ, XIJ, d_dvaux, s_dvaux, WI, d_ddv,
-             s_m, s_rho, s_idx):
+             s_m, s_rho, s_idx, d_e, s_deaux, d_deaux, d_dde, s_de):
         dstart_indx, row, col, drowcol, dim, dimsq = declare('int', 6)
         blk, dblkrowcol, sstart_indx, srowcol, rowcol = declare('int', 5)
         dim = self.dim
@@ -577,6 +602,14 @@ class SecondGradient(Equation):
         dstart_indx = d_idx * dimsq
         sstart_indx = s_idx * dimsq
         mbbyrhob = s_m[s_idx] / s_rho[s_idx]
+
+
+        for row in range(dim):
+            deij = d_deaux[d_idx * dim + row] - s_deaux[s_idx * dim + row]
+            for col in range(dim):
+                drowcol = dstart_indx + row * dim + col
+                d_dde[drowcol] += mbbyrhob * deij * XIJ[col] * WI
+
         for blk in range(dim):
             for row in range(dim):
                 for col in range(dim):
@@ -585,15 +618,29 @@ class SecondGradient(Equation):
                            s_dvaux[sstart_indx + blk * dim + row]
                     d_ddv[dblkrowcol] += mbbyrhob * dvij * XIJ[col] * WI
 
-    def post_loop(self, d_idx, d_dv, d_divv, d_cm, d_ddv):
+    def post_loop(self, d_idx, d_dv, d_divv, d_cm, d_ddv, d_dde):
         ddvpre = declare('matrix(27)')
-        ddvpreb, ddvblk, cm = declare('matrix(9)', 3)
+        ddvpreb, ddvblk, cm, ddepre, dde = declare('matrix(9)', 5)
         dstart_indx, row, col, rowcol, dim, dimsq = declare('int', 6)
-        blk, blkrowcol, dblkrowcol, ddstart_indx = declare('int', 4)
+        blk, blkrowcol, dblkrowcol, ddstart_indx, drowcol = declare('int', 5)
         dim = self.dim
         dimsq = self.dimsq
         dstart_indx = dimsq * d_idx
         ddstart_indx = dstart_indx * dim
+
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * dim + col
+                drowcol = dstart_indx + rowcol
+                ddepre[rowcol] = d_dde[drowcol]
+                cm[rowcol] = d_cm[drowcol]
+
+        mat_mult(cm, ddepre, dim, dde)
+
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * dim + col
+                d_dde[dstart_indx + rowcol] = dde[rowcol]
 
         for blk in range(dim):
             for row in range(dim):
@@ -602,7 +649,6 @@ class SecondGradient(Equation):
                     blkrowcol = blk * dimsq + rowcol
                     dblkrowcol = ddstart_indx + blkrowcol
                     ddvpre[blkrowcol] = d_ddv[dblkrowcol]
-                    cm[rowcol] = d_cm[dstart_indx + rowcol]
 
         for blk in range(dim):
             for row in range(dim):
@@ -961,7 +1007,7 @@ class UpdateGhostProps(Equation):
         assert GHOST_TAG == 2
 
     def initialize(self, d_idx, d_orig_idx, d_p, d_tag, d_h, d_rho, d_dndh,
-                   d_n, d_cm, d_dv, d_dvaux, d_ddv):
+                   d_n, d_cm, d_dv, d_dvaux, d_ddv, d_dde, d_de, d_deaux):
         idx, dim, dimsq, row, col, rowcol = declare('int', 6)
         blkrowcol, dstart_indx, start_indx = declare('int', 3)
         if d_tag[d_idx] == 2:
@@ -976,11 +1022,15 @@ class UpdateGhostProps(Equation):
             dstart_indx = dimsq * d_idx
             start_indx = dimsq * idx
             for row in range(dim):
+                d_de[d_idx * dim + row] = d_de[idx * dim + row]
+                d_deaux[d_idx * dim + row] = d_de[idx * dim + row]
                 for col in range(dim):
                     rowcol = row * dim + col
                     d_cm[dstart_indx + rowcol] = d_cm[start_indx + rowcol]
                     d_dv[dstart_indx + rowcol] = d_dv[start_indx + rowcol]
                     d_dvaux[dstart_indx + rowcol] = d_dvaux[
+                        start_indx + rowcol]
+                    d_dde[dstart_indx + rowcol] = d_dde[
                         start_indx + rowcol]
 
             for blk in range(dim):
