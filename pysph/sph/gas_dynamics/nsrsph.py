@@ -853,8 +853,8 @@ class MomentumAndEnergyMI1(Equation):
                 aaden += s_dv[sstart_indx + rowcol] * XIJ[row] * XIJ[col]
         aaij = aanum / aaden
 
-        phiijin = min(1, 4 * aaij / ((1 + aaij) * (1 + aaij)))
-        phiij = max(0, phiijin)
+        phiijin = min(1.0, 4 * aaij / ((1 + aaij) * (1 + aaij)))
+        phiij = max(0.0, phiijin)
 
         if etaij < self.eta_crit:
             powin = (etaij - self.eta_crit) / self.eta_fold
@@ -890,9 +890,8 @@ class MomentumAndEnergyMI1(Equation):
         pij = d_rho[d_idx] - s_rho[s_idx]
         vsigng = sqrt(abs(pij)/rhoij)
 
-
-        mui = min(0, dot(vij, etai, dim) / (etaisq + epssq))
-        muj = min(0, dot(vij, etaj, dim) / (etajsq + epssq))
+        mui = min(0.0, dot(vij, etai, dim) / (etaisq + epssq))
+        muj = min(0.0, dot(vij, etaj, dim) / (etajsq + epssq))
 
         Qi = d_rho[d_idx] * mui * (-d_alpha[d_idx] * d_cs[d_idx] +
                                    beta * mui)
