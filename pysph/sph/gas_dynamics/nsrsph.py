@@ -443,46 +443,46 @@ class AuxillaryGradient(Equation):
         return [mat_mult, augmented_matrix, identity, gj_solve, mat_vec_mult]
 
     def initialize(self, d_dvaux, d_idx, d_invdm, d_deaux):
-        dstart_indx, i, dim, dimsq = declare('int', 4)
+        dsi2, i, dim, dimsq = declare('int', 4)
         dimsq = self.dimsq
         dim = self.dim
-        dstart_indx = dimsq * d_idx
+        dsi2 = dimsq * d_idx
         for i in range(dim):
             d_deaux[dim * d_idx + i] = 0.0
 
         for i in range(dimsq):
-            d_dvaux[dstart_indx + i] = 0.0
-            d_invdm[dstart_indx + i] = 0.0
+            d_dvaux[dsi2 + i] = 0.0
+            d_invdm[dsi2 + i] = 0.0
 
     def loop(self, d_idx, VIJ, XIJ, d_invdm, DWI, d_dvaux,
              s_m, s_idx, d_deaux, d_e, s_e):
-        dstart_indx, row, col, drowcol, dim, dimsq = declare('int', 6)
+        dsi2, row, col, drowcol, dim, dimsq = declare('int', 6)
         dim = self.dim
         dimsq = self.dimsq
-        dstart_indx = d_idx * dimsq
+        dsi2 = d_idx * dimsq
         eij = d_e[d_idx] - s_e[s_idx]
         for row in range(dim):
             d_deaux[d_idx * dim + row] += s_m[s_idx] * eij * DWI[row]
             for col in range(dim):
-                drowcol = dstart_indx + row * dim + col
+                drowcol = dsi2 + row * dim + col
                 d_dvaux[drowcol] += s_m[s_idx] * VIJ[row] * DWI[col]
                 d_invdm[drowcol] += s_m[s_idx] * XIJ[row] * DWI[col]
 
     def post_loop(self, d_idx, d_dv, d_divv, d_invdm, d_dvaux, d_deaux):
-        dstart_indx, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
+        dsi2, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
         invdm, idmat, dvaux, dvauxpre, dm = declare('matrix(9)', 5)
         auginvdm = declare('matrix(18)')
         deauxpre, deaux = declare('matrix(3)', 2)
 
         dim = self.dim
         dimsq = dim * dim
-        dstart_indx = dimsq * d_idx
+        dsi2 = dimsq * d_idx
 
         for row in range(dim):
             deauxpre[row] = d_deaux[dim * d_idx + row]
             for col in range(dim):
                 rowcol = row * dim + col
-                drowcol = dstart_indx + rowcol
+                drowcol = dsi2 + rowcol
                 dvauxpre[rowcol] = d_dvaux[drowcol]
                 invdm[rowcol] = d_invdm[drowcol]
 
@@ -496,7 +496,7 @@ class AuxillaryGradient(Equation):
             d_deaux[d_idx * dim + row] = deaux[row]
             for col in range(dim):
                 rowcol = row * dim + col
-                drowcol = dstart_indx + rowcol
+                drowcol = dsi2 + rowcol
                 d_dvaux[drowcol] = dvaux[rowcol]
 
 
@@ -513,46 +513,46 @@ class FirstGradient(Equation):
         return [mat_mult, mat_vec_mult]
 
     def initialize(self, d_dv, d_idx, d_divv, d_de):
-        dstart_indx, i, dim, dimsq = declare('int', 4)
+        dsi2, i, dim, dimsq = declare('int', 4)
         dim = self.dim
         dimsq = self.dimsq
-        dstart_indx = dimsq * d_idx
+        dsi2 = dimsq * d_idx
 
         for i in range(dim):
             d_de[dim * d_idx + i] = 0.0
 
         for i in range(dimsq):
-            d_dv[dstart_indx + i] = 0.0
+            d_dv[dsi2 + i] = 0.0
         d_divv[d_idx] = 0.0
 
     def loop(self, d_idx, VIJ, XIJ, d_dv, WI,
              s_m, s_rho, s_idx, d_e, s_e, d_de):
-        dstart_indx, row, col, drowcol, dim, dimsq = declare('int', 6)
+        dsi2, row, col, drowcol, dim, dimsq = declare('int', 6)
         dim = self.dim
         dimsq = self.dimsq
-        dstart_indx = d_idx * dimsq
+        dsi2 = d_idx * dimsq
         mbbyrhob = s_m[s_idx] / s_rho[s_idx]
         eij = d_e[d_idx] - s_e[s_idx]
         for row in range(dim):
             d_de[d_idx * dim + row] += mbbyrhob * eij * XIJ[row] * WI
             for col in range(dim):
-                drowcol = dstart_indx + row * dim + col
+                drowcol = dsi2 + row * dim + col
                 d_dv[drowcol] += mbbyrhob * VIJ[row] * XIJ[col] * WI
 
     def post_loop(self, d_idx, d_dv, d_divv, d_cm, d_de):
         dv, dvpre, cm = declare('matrix(9)', 3)
 
-        dstart_indx, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
+        dsi2, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
         depre, de= declare('matrix(3)', 2)
         dim = self.dim
         dimsq = dim * dim
-        dstart_indx = dimsq * d_idx
+        dsi2 = dimsq * d_idx
 
         for row in range(dim):
             depre[row] = d_de[dim * d_idx + row]
             for col in range(dim):
                 rowcol = row * dim + col
-                drowcol = dstart_indx + rowcol
+                drowcol = dsi2 + rowcol
                 dvpre[rowcol] = d_dv[drowcol]
                 cm[rowcol] = d_cm[drowcol]
 
@@ -564,7 +564,7 @@ class FirstGradient(Equation):
             d_de[d_idx * dim + row] = de[row]
             for col in range(dim):
                 rowcol = row * dim + col
-                drowcol = dstart_indx + rowcol
+                drowcol = dsi2 + rowcol
                 d_dv[drowcol] = dv[rowcol]
 
 
@@ -581,57 +581,57 @@ class SecondGradient(Equation):
         return [mat_mult]
 
     def initialize(self, d_ddv, d_idx, d_divv, d_dde):
-        ddstart_indx, i, dim, dimcu, blk, row, col = declare('int', 7)
-        dstart_indx, dimsq = declare('int', 2)
+        dsi3, i, dim, dimcu, blk, row, col = declare('int', 7)
+        dsi2, dimsq = declare('int', 2)
         dim = self.dim
         dimsq = dim*dim
         dimcu = dim * dim * dim
-        dstart_indx = dimsq * d_idx
-        ddstart_indx = dimcu * d_idx
+        dsi2 = dimsq * d_idx
+        dsi3 = dimcu * d_idx
         for i in range(dimcu):
-            d_ddv[ddstart_indx + i] = 0.0
+            d_ddv[dsi3 + i] = 0.0
         for i in range(dimsq):
-            d_dde[dstart_indx + i] = 0.0
+            d_dde[dsi2 + i] = 0.0
 
     def loop(self, d_idx, VIJ, XIJ, d_dvaux, s_dvaux, WI, d_ddv,
              s_m, s_rho, s_idx, d_e, s_deaux, d_deaux, d_dde, s_de):
-        dstart_indx, row, col, drowcol, dim, dimsq = declare('int', 6)
-        blk, dblkrowcol, sstart_indx, srowcol, rowcol = declare('int', 5)
+        dsi2, row, col, drowcol, dim, dimsq = declare('int', 6)
+        blk, dblkrowcol, ssi2, srowcol, rowcol = declare('int', 5)
         dim = self.dim
         dimsq = self.dimsq
-        dstart_indx = d_idx * dimsq
-        sstart_indx = s_idx * dimsq
+        dsi2 = d_idx * dimsq
+        ssi2 = s_idx * dimsq
         mbbyrhob = s_m[s_idx] / s_rho[s_idx]
 
 
         for row in range(dim):
             deij = d_deaux[d_idx * dim + row] - s_deaux[s_idx * dim + row]
             for col in range(dim):
-                drowcol = dstart_indx + row * dim + col
+                drowcol = dsi2 + row * dim + col
                 d_dde[drowcol] += mbbyrhob * deij * XIJ[col] * WI
 
         for blk in range(dim):
             for row in range(dim):
                 for col in range(dim):
-                    dblkrowcol = dstart_indx * dim + blk * dimsq + row * dim + col
-                    dvij = d_dvaux[dstart_indx + blk * dim + row] - \
-                           s_dvaux[sstart_indx + blk * dim + row]
+                    dblkrowcol = dsi2 * dim + blk * dimsq + row * dim + col
+                    dvij = d_dvaux[dsi2 + blk * dim + row] - \
+                           s_dvaux[ssi2 + blk * dim + row]
                     d_ddv[dblkrowcol] += mbbyrhob * dvij * XIJ[col] * WI
 
     def post_loop(self, d_idx, d_dv, d_divv, d_cm, d_ddv, d_dde):
         ddvpre = declare('matrix(27)')
         ddvpreb, ddvblk, cm, ddepre, dde = declare('matrix(9)', 5)
-        dstart_indx, row, col, rowcol, dim, dimsq = declare('int', 6)
-        blk, blkrowcol, dblkrowcol, ddstart_indx, drowcol = declare('int', 5)
+        dsi2, row, col, rowcol, dim, dimsq = declare('int', 6)
+        blk, blkrowcol, dblkrowcol, dsi3, drowcol = declare('int', 5)
         dim = self.dim
         dimsq = self.dimsq
-        dstart_indx = dimsq * d_idx
-        ddstart_indx = dstart_indx * dim
+        dsi2 = dimsq * d_idx
+        dsi3 = dsi2 * dim
 
         for row in range(dim):
             for col in range(dim):
                 rowcol = row * dim + col
-                drowcol = dstart_indx + rowcol
+                drowcol = dsi2 + rowcol
                 ddepre[rowcol] = d_dde[drowcol]
                 cm[rowcol] = d_cm[drowcol]
 
@@ -640,14 +640,14 @@ class SecondGradient(Equation):
         for row in range(dim):
             for col in range(dim):
                 rowcol = row * dim + col
-                d_dde[dstart_indx + rowcol] = dde[rowcol]
+                d_dde[dsi2 + rowcol] = dde[rowcol]
 
         for blk in range(dim):
             for row in range(dim):
                 for col in range(dim):
                     rowcol = row * dim + col
                     blkrowcol = blk * dimsq + rowcol
-                    dblkrowcol = ddstart_indx + blkrowcol
+                    dblkrowcol = dsi3 + blkrowcol
                     ddvpre[blkrowcol] = d_ddv[dblkrowcol]
 
         for blk in range(dim):
@@ -660,7 +660,7 @@ class SecondGradient(Equation):
             for row in range(dim):
                 for col in range(dim):
                     rowcol = row * dim + col
-                    dblkrowcol = ddstart_indx + blk * dimsq + rowcol
+                    dblkrowcol = dsi3 + blk * dimsq + rowcol
                     d_ddv[dblkrowcol] = ddvblk[rowcol]
 
 
@@ -707,31 +707,31 @@ class CorrectionMatrix(Equation):
 
     def loop(self, d_idx, s_m, s_idx, VIJ, DWI, XIJ, d_dv,
              s_rho, d_cm, WI):
-        dstart_indx, row, col, drowcol, dim, dimsq = declare('int', 6)
+        dsi2, row, col, drowcol, dim, dimsq = declare('int', 6)
         dim = self.dim
         dimsq = self.dimsq
-        dstart_indx = d_idx * dimsq
+        dsi2 = d_idx * dimsq
         mbbyrhob = s_m[s_idx] / s_rho[s_idx]
         for row in range(dim):
             for col in range(dim):
-                drowcol = dstart_indx + row * dim + col
+                drowcol = dsi2 + row * dim + col
                 d_cm[drowcol] += mbbyrhob * XIJ[row] * XIJ[col] * WI
 
     def post_loop(self, d_idx, d_dv, d_divv, d_cm):
         invcm, cm, idmat = declare('matrix(9)', 3)
         augcm = declare('matrix(18)')
-        dstart_indx, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
+        dsi2, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
 
         dim = self.dim
         dimsq = self.dimsq
-        dstart_indx = dimsq * d_idx
+        dsi2 = dimsq * d_idx
         identity(invcm, dim)
         identity(idmat, dim)
 
         for row in range(dim):
             for col in range(dim):
                 rowcol = row * dim + col
-                drowcol = dstart_indx + rowcol
+                drowcol = dsi2 + rowcol
                 invcm[rowcol] = d_cm[drowcol]
 
         augmented_matrix(invcm, idmat, dim, dim, dim, augcm)
@@ -740,7 +740,7 @@ class CorrectionMatrix(Equation):
         for row in range(dim):
             for col in range(dim):
                 rowcol = row * dim + col
-                drowcol = dstart_indx + rowcol
+                drowcol = dsi2 + rowcol
                 d_cm[drowcol] = cm[rowcol]
 
 
@@ -825,12 +825,12 @@ class MomentumAndEnergyMI1(Equation):
         scm, dcm, idmat = declare('matrix(9)', 3)
         gmi, gmj, etai, etaj, vij, mpinc = declare('matrix(3)', 6)
         dvdel, ddvdeldel = declare('matrix(3)', 2)
-        dstart_indx, sstart_indx, row, col, blk = declare('int', 5)
+        dsi2, ssi2, row, col, blk = declare('int', 5)
         rowcol, drowcol, srowcol, dim, dimsq = declare('int', 5)
         dim = self.dim
         dimsq = self.dimsq
-        dstart_indx = dimsq * d_idx
-        sstart_indx = dimsq * s_idx
+        dsi2 = dimsq * d_idx
+        ssi2 = dimsq * s_idx
 
         for row in range(dim):
             gmi[row] = 0.0
@@ -849,8 +849,8 @@ class MomentumAndEnergyMI1(Equation):
             mpinc[row] = 0.5 * XIJ[row]
             for col in range(dim):
                 rowcol = row * dim + col
-                aanum += d_dv[dstart_indx + rowcol] * XIJ[row] * XIJ[col]
-                aaden += s_dv[sstart_indx + rowcol] * XIJ[row] * XIJ[col]
+                aanum += d_dv[dsi2 + rowcol] * XIJ[row] * XIJ[col]
+                aaden += s_dv[ssi2 + rowcol] * XIJ[row] * XIJ[col]
         aaij = aanum / aaden
 
         phiijin = min(1.0, 4 * aaij / ((1 + aaij) * (1 + aaij)))
@@ -869,16 +869,16 @@ class MomentumAndEnergyMI1(Equation):
                       s_de[s_idx * dim + row]) * mpinc[col]
             for col in range(dim):
                 rowcol = row * dim + col
-                dvdel[row] -= (d_dv[dstart_indx + rowcol] +
-                               s_dv[sstart_indx + rowcol]) * mpinc[col]
-                ddedel += (d_dde[dstart_indx + rowcol] -
-                           s_dde[sstart_indx + rowcol]
+                dvdel[row] -= (d_dv[dsi2 + rowcol] +
+                               s_dv[ssi2 + rowcol]) * mpinc[col]
+                ddedel += (d_dde[dsi2 + rowcol] -
+                           s_dde[ssi2 + rowcol]
                            ) * mpinc[row] * mpinc[col]
                 for blk in range(dim):
                     rowcol = row * dim + col
                     ddvdeldel[row] += (
-                        d_ddv[dstart_indx * dim + blk * dimsq + rowcol] -
-                        s_ddv[sstart_indx * dim + blk * dimsq + rowcol]
+                        d_ddv[dsi2 * dim + blk * dimsq + rowcol] -
+                        s_ddv[ssi2 * dim + blk * dimsq + rowcol]
                         ) * mpinc[col] * mpinc[blk]
 
         vij[0] = VIJ[0] + phiij * (dvdel[0] + 0.5 * ddvdeldel[0])
@@ -901,8 +901,8 @@ class MomentumAndEnergyMI1(Equation):
         for row in range(dim):
             for col in range(dim):
                 rowcol = row * dim + col
-                drowcol = dstart_indx + rowcol
-                srowcol = sstart_indx + rowcol
+                drowcol = dsi2 + rowcol
+                srowcol = ssi2 + rowcol
                 gmi[row] -= d_cm[drowcol] * XIJ[col] * WI
                 gmj[row] -= s_cm[srowcol] * XIJ[col] * WJ
 
@@ -1022,7 +1022,7 @@ class UpdateGhostProps(Equation):
     def initialize(self, d_idx, d_orig_idx, d_p, d_tag, d_h, d_rho, d_dndh,
                    d_n, d_cm, d_dv, d_dvaux, d_ddv, d_dde, d_de, d_deaux):
         idx, dim, dimsq, row, col, rowcol = declare('int', 6)
-        blkrowcol, dstart_indx, start_indx = declare('int', 3)
+        blkrowcol, dsi2, si2 = declare('int', 3)
         if d_tag[d_idx] == 2:
             idx = d_orig_idx[d_idx]
             d_p[d_idx] = d_p[idx]
@@ -1032,26 +1032,26 @@ class UpdateGhostProps(Equation):
             d_n[d_idx] = d_n[idx]
             dim = self.dim
             dimsq = self.dimsq
-            dstart_indx = dimsq * d_idx
-            start_indx = dimsq * idx
+            dsi2 = dimsq * d_idx
+            si2 = dimsq * idx
             for row in range(dim):
                 d_de[d_idx * dim + row] = d_de[idx * dim + row]
                 d_deaux[d_idx * dim + row] = d_de[idx * dim + row]
                 for col in range(dim):
                     rowcol = row * dim + col
-                    d_cm[dstart_indx + rowcol] = d_cm[start_indx + rowcol]
-                    d_dv[dstart_indx + rowcol] = d_dv[start_indx + rowcol]
-                    d_dvaux[dstart_indx + rowcol] = d_dvaux[
-                        start_indx + rowcol]
-                    d_dde[dstart_indx + rowcol] = d_dde[
-                        start_indx + rowcol]
+                    d_cm[dsi2 + rowcol] = d_cm[si2 + rowcol]
+                    d_dv[dsi2 + rowcol] = d_dv[si2 + rowcol]
+                    d_dvaux[dsi2 + rowcol] = d_dvaux[
+                        si2 + rowcol]
+                    d_dde[dsi2 + rowcol] = d_dde[
+                        si2 + rowcol]
 
             for blk in range(dim):
                 for row in range(dim):
                     for col in range(dim):
                         blkrowcol = blk * dimsq + row * dim + col
-                        d_ddv[dim * dstart_indx + blkrowcol] = \
-                            d_ddv[dim * start_indx + blkrowcol]
+                        d_ddv[dim * dsi2 + blkrowcol] = \
+                            d_ddv[dim * si2 + blkrowcol]
 
 
 class PECStep(IntegratorStep):
