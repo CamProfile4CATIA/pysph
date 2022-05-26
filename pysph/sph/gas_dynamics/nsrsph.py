@@ -543,7 +543,7 @@ class FirstGradient(Equation):
         dv, dvpre, cm = declare('matrix(9)', 3)
 
         dsi2, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
-        depre, de= declare('matrix(3)', 2)
+        depre, de = declare('matrix(3)', 2)
         dim = self.dim
         dimsq = dim * dim
         dsi2 = dimsq * d_idx
@@ -584,7 +584,7 @@ class SecondGradient(Equation):
         dsi3, i, dim, dimcu, blk, row, col = declare('int', 7)
         dsi2, dimsq = declare('int', 2)
         dim = self.dim
-        dimsq = dim*dim
+        dimsq = dim * dim
         dimcu = dim * dim * dim
         dsi2 = dimsq * d_idx
         dsi3 = dimcu * d_idx
@@ -602,7 +602,6 @@ class SecondGradient(Equation):
         dsi2 = d_idx * dimsq
         ssi2 = s_idx * dimsq
         mbbyrhob = s_m[s_idx] / s_rho[s_idx]
-
 
         for row in range(dim):
             deij = d_deaux[d_idx * dim + row] - s_deaux[s_idx * dim + row]
@@ -749,7 +748,7 @@ class MomentumAndEnergyMI1(Equation):
         return [mat_vec_mult, dot]
 
     def __init__(self, dest, sources, dim, fkern, eta_crit=0.3, eta_fold=0.2,
-                 beta=2.0, alphac = 0.05):
+                 beta=2.0, alphac=0.05):
         r"""
         Momentum and Energy Equations with artificial viscosity.
 
@@ -861,11 +860,11 @@ class MomentumAndEnergyMI1(Equation):
             phiij = phiij * exp(-powin * powin)
 
         dedel = 0.0
-        ddedel=0.0
+        ddedel = 0.0
         for row in range(dim):
             ddvdeldel[row] = 0.0
             dvdel[row] = 0.0
-            dedel -= (d_de[d_idx*dim + row] +
+            dedel -= (d_de[d_idx * dim + row] +
                       s_de[s_idx * dim + row]) * mpinc[col]
             for col in range(dim):
                 rowcol = row * dim + col
@@ -876,9 +875,10 @@ class MomentumAndEnergyMI1(Equation):
                            ) * mpinc[row] * mpinc[col]
                 for blk in range(dim):
                     rowcol = row * dim + col
-                    ddvdeldel[row] += (
-                        d_ddv[dsi2 * dim + blk * dimsq + rowcol] -
-                        s_ddv[ssi2 * dim + blk * dimsq + rowcol]
+                    ddvdeldel[row] += \
+                        (
+                                d_ddv[dsi2 * dim + blk * dimsq + rowcol] -
+                                s_ddv[ssi2 * dim + blk * dimsq + rowcol]
                         ) * mpinc[col] * mpinc[blk]
 
         vij[0] = VIJ[0] + phiij * (dvdel[0] + 0.5 * ddvdeldel[0])
@@ -888,7 +888,7 @@ class MomentumAndEnergyMI1(Equation):
         eij = d_e[d_idx] - s_e[s_idx] + phiij * (dedel + 0.5 * ddedel)
         rhoij = 0.5 * (s_rho[s_idx] + d_rho[d_idx])
         pij = d_rho[d_idx] - s_rho[s_idx]
-        vsigng = sqrt(abs(pij)/rhoij)
+        vsigng = sqrt(abs(pij) / rhoij)
 
         mui = min(0.0, dot(vij, etai, dim) / (etaisq + epssq))
         muj = min(0.0, dot(vij, etaj, dim) / (etajsq + epssq))
@@ -923,11 +923,11 @@ class MomentumAndEnergyMI1(Equation):
 
         # accelerations for the thermal energy
         vijdotdwi = dot(VIJ, gmi, dim)
-        normgmij = sqrt((gmi[0] + gmj[0])*(gmi[0] + gmj[0]) +
-                        (gmi[0] + gmj[0])*(gmi[0] + gmj[0]) +
-                        (gmi[0] + gmj[0])*(gmi[0] + gmj[0]))
+        normgmij = sqrt((gmi[0] + gmj[0]) * (gmi[0] + gmj[0]) +
+                        (gmi[1] + gmj[1]) * (gmi[1] + gmj[1]) +
+                        (gmi[2] + gmj[2]) * (gmi[2] + gmj[2]))
 
-        d_ae[d_idx] -= 0.5 * self.alphac * mj * vsigng * eij * normgmij
+        d_ae[d_idx] -= 0.5 * self.alphac * mj * vsigng * eij * normgmij/rhoij
         d_ae[d_idx] += mj * pibrhoi2 * vijdotdwi
 
 
@@ -1041,10 +1041,8 @@ class UpdateGhostProps(Equation):
                     rowcol = row * dim + col
                     d_cm[dsi2 + rowcol] = d_cm[si2 + rowcol]
                     d_dv[dsi2 + rowcol] = d_dv[si2 + rowcol]
-                    d_dvaux[dsi2 + rowcol] = d_dvaux[
-                        si2 + rowcol]
-                    d_dde[dsi2 + rowcol] = d_dde[
-                        si2 + rowcol]
+                    d_dvaux[dsi2 + rowcol] = d_dvaux[si2 + rowcol]
+                    d_dde[dsi2 + rowcol] = d_dde[si2 + rowcol]
 
             for blk in range(dim):
                 for row in range(dim):
