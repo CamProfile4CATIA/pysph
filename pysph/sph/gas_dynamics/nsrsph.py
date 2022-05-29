@@ -38,7 +38,8 @@ class NSRSPHScheme(Scheme):
     def __init__(self, fluids, solids, dim, gamma, hfact, beta=2.0, fkern=1.0,
                  max_density_iterations=250, alphamax=1.0, alphamin=0.1,
                  density_iteration_tolerance=1e-3, has_ghosts=False,
-                 eta_crit=0.3, eta_fold=0.2, adaptive_h_scheme='mpm'):
+                 eta_crit=0.3, eta_fold=0.2, eps = 0.01,
+                 adaptive_h_scheme='mpm'):
         """
         Magma2 formulation of Rosswog.
 
@@ -90,6 +91,9 @@ class NSRSPHScheme(Scheme):
         alphamax : float, optional
             :math:`\\alpha_{av}` for artificial viscosity switch, by default
             1.0
+        eps : float, optional
+            Numerical parameter often used in denominator to avoid division
+            by zero, by default 0.01
         """
 
         self.fluids = fluids
@@ -108,6 +112,7 @@ class NSRSPHScheme(Scheme):
         self.alphamin = alphamin
         self.eta_crit = eta_crit
         self.eta_fold = eta_fold
+        self.eps = eps
 
     def add_user_options(self, group):
         group.add_argument("--alpha-max", action="store", type=float,
@@ -235,7 +240,8 @@ class NSRSPHScheme(Scheme):
                                            dim=self.dim, beta=self.beta,
                                            fkern=self.fkern,
                                            eta_crit=self.eta_crit,
-                                           eta_fold=self.eta_fold))
+                                           eta_fold=self.eta_fold,
+                                           eps = self.eps))
 
         equations.append(Group(equations=g5))
 
@@ -757,7 +763,7 @@ class MomentumAndEnergyMI1(Equation):
         return [mat_vec_mult, dot]
 
     def __init__(self, dest, sources, dim, fkern, eta_crit=0.3, eta_fold=0.2,
-                 beta=2.0, alphac=0.05):
+                 beta=2.0, alphac=0.05, eps = 0.01):
         r"""
         Momentum and Energy Equations with artificial viscosity.
 
@@ -801,6 +807,7 @@ class MomentumAndEnergyMI1(Equation):
         self.eta_crit = eta_crit
         self.eta_fold = eta_fold
         self.alphac = alphac
+        self.eps = eps
         super().__init__(dest, sources)
 
     def initialize(self, d_idx, d_au, d_av, d_aw, d_ae):
@@ -818,9 +825,7 @@ class MomentumAndEnergyMI1(Equation):
              s_w, d_dv, s_dv, d_ddv, s_ddv, d_de, s_de, d_dde, s_dde, d_e,
              s_e, RHOIJ):
 
-        # TODO: Make eps a parameter
-        eps = 0.01
-        epssq = eps * eps
+        epssq = self.eps * self.eps
 
         beta = self.beta
 
