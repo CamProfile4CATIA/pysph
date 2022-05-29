@@ -25,6 +25,7 @@ from compyle.types import declare, annotate
 from pysph.base.particle_array import get_ghost_tag
 from math import *
 from pysph.sph.equation import Equation
+from pysph.sph.integrator import Integrator
 from pysph.sph.integrator_step import IntegratorStep
 from pysph.sph.scheme import Scheme
 from pysph.sph.wc.linalg import (augmented_matrix, gj_solve, identity,
@@ -145,15 +146,16 @@ class NSRSPHScheme(Scheme):
         if extra_steppers is not None:
             steppers.update(extra_steppers)
 
-        from pysph.sph.integrator import PECIntegrator
-
-        cls = integrator_cls if integrator_cls is not None else PECIntegrator
-        step_cls = PECStep
+        if integrator_cls is not None:
+            int_cls = integrator_cls
+        else:
+            int_cls = TVDRK2Integrator
+        step_cls = TVDRK2Step
         for name in self.fluids:
             if name not in steppers:
                 steppers[name] = step_cls()
 
-        integrator = cls(**steppers)
+        integrator = int_cls(**steppers)
 
         from pysph.solver.solver import Solver
         self.solver = Solver(dim=self.dim, integrator=integrator,
@@ -1064,7 +1066,7 @@ class UpdateGhostProps(Equation):
                             d_ddv[dim * si2 + blkrowcol]
 
 
-class PECStep(IntegratorStep):
+class TVDRK2Step(IntegratorStep):
     """Predictor Corrector integrator for Gas-dynamics modified for TSPH"""
 
     def initialize(self, d_idx, d_x0, d_y0, d_z0, d_x, d_y, d_z, d_h, d_u0,
@@ -1092,30 +1094,7 @@ class PECStep(IntegratorStep):
                d_u, d_v, d_w, d_e0, d_e, d_au, d_av, d_aw, d_ae, d_rho, d_rho0,
                d_arho, d_h, d_h0, d_ah, dt, d_n, d_n0, d_an, d_alpha,
                d_alpha0, d_aalpha):
-        dtb2 = 0.5 * dt
 
-        d_u[d_idx] = d_u0[d_idx] + dtb2 * d_au[d_idx]
-        d_v[d_idx] = d_v0[d_idx] + dtb2 * d_av[d_idx]
-        d_w[d_idx] = d_w0[d_idx] + dtb2 * d_aw[d_idx]
-
-        d_x[d_idx] = d_x0[d_idx] + dtb2 * d_u[d_idx]
-        d_y[d_idx] = d_y0[d_idx] + dtb2 * d_v[d_idx]
-        d_z[d_idx] = d_z0[d_idx] + dtb2 * d_w[d_idx]
-
-        # update thermal energy
-        d_e[d_idx] = d_e0[d_idx] + dtb2 * d_ae[d_idx]
-
-        # predict density and smoothing lengths for faster
-        # convergence. NNPS need not be explicitly updated since it
-        # will be called at the end of the predictor stage.
-        d_h[d_idx] = d_h0[d_idx] + dtb2 * d_ah[d_idx]
-        d_rho[d_idx] = d_rho0[d_idx] + dtb2 * d_arho[d_idx]
-        d_n[d_idx] = d_n0[d_idx] + dtb2 * d_an[d_idx]
-        d_alpha[d_idx] = d_alpha0[d_idx] + dtb2 * d_aalpha[d_idx]
-
-    def stage2(self, d_idx, d_x0, d_y0, d_z0, d_x, d_y, d_z, d_u0, d_v0, d_w0,
-               d_u, d_v, d_w, d_e0, d_e, d_au, d_av, d_aw, d_ae, dt,
-               d_alpha, d_alpha0, d_aalpha):
         d_u[d_idx] = d_u0[d_idx] + dt * d_au[d_idx]
         d_v[d_idx] = d_v0[d_idx] + dt * d_av[d_idx]
         d_w[d_idx] = d_w0[d_idx] + dt * d_aw[d_idx]
@@ -1124,9 +1103,63 @@ class PECStep(IntegratorStep):
         d_y[d_idx] = d_y0[d_idx] + dt * d_v[d_idx]
         d_z[d_idx] = d_z0[d_idx] + dt * d_w[d_idx]
 
-        # Update densities and smoothing lengths from the accelerations
+        # update thermal energy
         d_e[d_idx] = d_e0[d_idx] + dt * d_ae[d_idx]
+
+        # predict density and smoothing lengths for faster
+        # convergence. NNPS need not be explicitly updated since it
+        # will be called at the end of the predictor stage.
+        d_h[d_idx] = d_h0[d_idx] + dt * d_ah[d_idx]
+        d_rho[d_idx] = d_rho0[d_idx] + dt * d_arho[d_idx]
+        d_n[d_idx] = d_n0[d_idx] + dt * d_an[d_idx]
         d_alpha[d_idx] = d_alpha0[d_idx] + dt * d_aalpha[d_idx]
+
+    def stage2(self, d_idx, d_x0, d_y0, d_z0, d_x, d_y, d_z, d_u0, d_v0, d_w0,
+               d_u, d_v, d_w, d_e0, d_e, d_au, d_av, d_aw, d_ae, dt,
+               d_alpha, d_alpha0, d_aalpha):
+        d_u[d_idx] = 0.5 * (d_u[d_idx] + d_u0[d_idx] + dt * d_au[d_idx])
+        d_v[d_idx] = 0.5 * (d_v[d_idx] + d_v0[d_idx] + dt * d_av[d_idx])
+        d_w[d_idx] = 0.5 * (d_w[d_idx] + d_w0[d_idx] + dt * d_aw[d_idx])
+
+        d_x[d_idx] = 0.5 * (d_x[d_idx] + d_x0[d_idx] + dt * d_u[d_idx])
+        d_y[d_idx] = 0.5 * (d_y[d_idx] + d_y0[d_idx] + dt * d_v[d_idx])
+        d_z[d_idx] = 0.5 * (d_z[d_idx] + d_z0[d_idx] + dt * d_w[d_idx])
+
+        # Update densities and smoothing lengths from the accelerations
+        d_e[d_idx] = 0.5 * (d_e[d_idx] + d_e0[d_idx] + dt * d_ae[d_idx])
+        d_alpha[d_idx] = 0.5 * (d_alpha[d_idx] + d_alpha0[d_idx] + dt * d_aalpha[d_idx])
+
+class TVDRK2Integrator(Integrator):
+    r"""
+    The system is advanced using:
+
+    .. math::
+
+        y^{*} = y^n + \Delta t f(y^{n}
+        y^{n+1} = 0.5 * (y^n + y^{*} + \Delta t f(y^{*})
+
+        y^{n + 1} = y^n + \Delta t F(y^{n+\frac{1}{2}})
+
+    """
+    def one_timestep(self, t, dt):
+        self.initialize()
+
+        self.compute_accelerations()
+        # Predict
+        self.stage1()
+        self.update_domain()
+
+        # Call any post-stage functions.
+        self.do_post_stage(0.5*dt, 1)
+
+        self.compute_accelerations()
+
+        # Correct
+        self.stage2()
+        self.update_domain()
+
+        # Call any post-stage functions.
+        self.do_post_stage(dt, 2)
 
 
 @annotate(fst='int', lst='int', key='doublep', arr='longp')
