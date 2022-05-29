@@ -819,7 +819,7 @@ class MomentumAndEnergyMI1(Equation):
              R2IJ, RHOIJ1, d_h, d_dndh, d_n, d_drhosumdh, s_h, s_dndh, s_n,
              s_drhosumdh, d_cm, s_cm, WI, WJ, d_u, d_v, d_w, s_u, s_v,
              s_w, d_dv, s_dv, d_ddv, s_ddv, d_de, s_de, d_dde, s_dde, d_e,
-             s_e):
+             s_e, RHOIJ):
 
         # TODO: Make eps a parameter
         eps = 0.01
@@ -900,9 +900,9 @@ class MomentumAndEnergyMI1(Equation):
         vij[2] = VIJ[2] + phiij * (dvdel[2] + 0.5 * ddvdeldel[2])
 
         eij = d_e[d_idx] - s_e[s_idx] + phiij * (dedel + 0.5 * ddedel)
-        rhoij = 0.5 * (s_rho[s_idx] + d_rho[d_idx])
-        pij = d_rho[d_idx] - s_rho[s_idx]
-        vsigng = sqrt(abs(pij) / rhoij)
+
+        pij = d_p[d_idx] - s_p[s_idx]
+        vsigng = sqrt(abs(pij) / RHOIJ)
 
         mui = min(0.0, dot(vij, etai, dim) / (etaisq + epssq))
         muj = min(0.0, dot(vij, etaj, dim) / (etajsq + epssq))
@@ -941,7 +941,7 @@ class MomentumAndEnergyMI1(Equation):
                         (gmi[1] + gmj[1]) * (gmi[1] + gmj[1]) +
                         (gmi[2] + gmj[2]) * (gmi[2] + gmj[2]))
 
-        d_ae[d_idx] -= 0.5 * self.alphac * mj * vsigng * eij * normgmij / rhoij
+        d_ae[d_idx] -= 0.5 * self.alphac * mj * vsigng * eij * normgmij / RHOIJ
         d_ae[d_idx] += mj * pibrhoi2 * vijdotdwi
 
 
