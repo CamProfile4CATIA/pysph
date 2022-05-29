@@ -881,9 +881,11 @@ class MomentumAndEnergyMI1(Equation):
                 dvdel[row] -= (d_dv[dsi2 + rowcol] +
                                s_dv[ssi2 + rowcol]) * mpinc[col]
                 ddedel += (d_dde[dsi2 + rowcol] -
-                           s_dde[ssi2 + rowcol]
-                           ) * mpinc[row] * mpinc[col]
-                for blk in range(dim):
+                           s_dde[ssi2 + rowcol]) * mpinc[row] * mpinc[col]
+
+        for blk in range(dim):
+            for row in range(dim):
+                for col in range(dim):
                     rowcol = row * dim + col
                     ddvdeldel[row] += \
                         (
@@ -903,9 +905,9 @@ class MomentumAndEnergyMI1(Equation):
         mui = min(0.0, dot(vij, etai, dim) / (etaisq + epssq))
         muj = min(0.0, dot(vij, etaj, dim) / (etajsq + epssq))
 
-        Qi = d_rho[d_idx] * mui * (-d_alpha[d_idx] * d_cs[d_idx] +
+        qi = d_rho[d_idx] * mui * (-d_alpha[d_idx] * d_cs[d_idx] +
                                    beta * mui)
-        Qj = s_rho[s_idx] * muj * (-s_alpha[s_idx] * s_cs[s_idx] +
+        qj = s_rho[s_idx] * muj * (-s_alpha[s_idx] * s_cs[s_idx] +
                                    beta * muj)
 
         for row in range(dim):
@@ -920,11 +922,11 @@ class MomentumAndEnergyMI1(Equation):
 
         # p_i/rhoi**2
         rhoi2 = d_rho[d_idx] * d_rho[d_idx]
-        pibrhoi2 = (d_p[d_idx] + Qi) / rhoi2
+        pibrhoi2 = (d_p[d_idx] + qi) / rhoi2
 
         # pj/rhoj**2
         rhoj2 = s_rho[s_idx] * s_rho[s_idx]
-        pjbrhoj2 = (s_p[s_idx] + Qj) / rhoj2
+        pjbrhoj2 = (s_p[s_idx] + qj) / rhoj2
 
         # accelerations for velocity
         d_au[d_idx] -= mj * (pibrhoi2 * gmi[0] + pjbrhoj2 * gmj[0])
