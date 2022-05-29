@@ -40,13 +40,11 @@ class NSRSPHScheme(Scheme):
                  density_iteration_tolerance=1e-3, has_ghosts=False,
                  eta_crit=0.3, eta_fold=0.2, adaptive_h_scheme='mpm'):
         """
-        Newtonian limit of Rosswog's special-relativistic SPH.
+        Magma2 formulation of Rosswog.
 
-        Derivation: [Rosswog2009]_
-        Improvements: [Rosswog2015]_
-        Limiter: [Rosswog2020a]_
-        Summary: [Rosswog2020b]_ (These equations are used in the
-        implementation here.)
+        Ref
+        Final set of Equations: [Rosswog2020b]_
+        Dissipation Limiter: [Rosswog2020a]_
 
         Notes
         -----
@@ -74,7 +72,7 @@ class NSRSPHScheme(Scheme):
             :math:`\\gamma` for Equation of state.
         hfact: float
             :math:`h_{fact}` for smoothing length adaptivity, also referred to
-            as kernel_factor in other gas dynamics schemes.
+            as kernel_factor in other schemes like AKDE, MPM, GSPH.
         beta : float, optional
             :math:`\\beta` for artificial viscosity, by default 2.0
         fkern : float, optional
@@ -941,7 +939,7 @@ class MomentumAndEnergyMI1(Equation):
                         (gmi[1] + gmj[1]) * (gmi[1] + gmj[1]) +
                         (gmi[2] + gmj[2]) * (gmi[2] + gmj[2]))
 
-        d_ae[d_idx] -= 0.5 * self.alphac * mj * vsigng * eij * normgmij / RHOIJ
+        d_ae[d_idx] -= 0.5 * self.alphac * mj * vsigng * eij * normgmij * RHOIJ1
         d_ae[d_idx] += mj * pibrhoi2 * vijdotdwi
 
 
