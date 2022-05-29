@@ -23,7 +23,7 @@ References
 """
 from compyle.types import declare, annotate
 from pysph.base.particle_array import get_ghost_tag
-
+from math import *
 from pysph.sph.equation import Equation
 from pysph.sph.integrator_step import IntegratorStep
 from pysph.sph.scheme import Scheme
@@ -35,7 +35,7 @@ GHOST_TAG = get_ghost_tag()
 
 class NSRSPHScheme(Scheme):
     def __init__(self, fluids, solids, dim, gamma, hfact, beta=2.0, fkern=1.0,
-                 max_density_iterations=250, alphamax=1.0,
+                 max_density_iterations=250, alphamax=1.0, alphamin=0.1,
                  density_iteration_tolerance=1e-3, has_ghosts=False,
                  eta_crit=0.3, eta_fold=0.2, adaptive_h_scheme='mpm'):
         """
@@ -107,6 +107,7 @@ class NSRSPHScheme(Scheme):
         self.adaptive_h_scheme = adaptive_h_scheme
         self.fkern = fkern
         self.alphamax = alphamax
+        self.alphamin = alphamin
         self.eta_crit = eta_crit
         self.eta_fold = eta_fold
 
@@ -211,8 +212,10 @@ class NSRSPHScheme(Scheme):
                                        dim=self.dim))
             g3p2.append(FirstGradient(dest=fluid, sources=all_pa,
                                       dim=self.dim))
-            g3p2.append(BalsaraSwitch(dest=fluid, sources=None,
-                                      alphaav=self.alphamax, fkern=self.fkern))
+            g3p2.append(EntropyBasedDissipationTrigger(
+                dest=fluid, sources=None, alphamax=self.alphamax,
+                alphamin=self.alphamin, fkern=self.fkern, l0=log(1e-4),
+                l1=log(5e-2), gamma=self.gamma))
         equations.append(Group(equations=g3p2))
 
         g4 = []
@@ -246,9 +249,10 @@ class NSRSPHScheme(Scheme):
         props = ['rho', 'm', 'x', 'y', 'z', 'u', 'v', 'w', 'h', 'cs', 'p', 'e',
                  'au', 'av', 'aw', 'ae', 'pid', 'gid', 'tag', 'dwdh', 'h0',
                  'converged', 'ah', 'arho', 'dt_cfl', 'e0', 'rho0', 'u0', 'v0',
-                 'w0', 'x0', 'y0', 'z0', 'alpha']
+                 'w0', 'x0', 'y0', 'z0']
         more_props = ['drhosumdh', 'n', 'dndh', 'prevn', 'prevdndh',
-                      'prevdrhosumdh', 'divv', 'an', 'n0']
+                      'prevdrhosumdh', 'divv', 'an', 'n0', 'alpha0',
+                      'aalpha']
         props.extend(more_props)
         output_props = 'rho p u v w x y z e n divv h alpha'.split(' ')
         for fluid in self.fluids:
@@ -257,6 +261,8 @@ class NSRSPHScheme(Scheme):
             pa.add_property('orig_idx', type='int')
             # Guess for number density.
             pa.add_property('n', data=pa.rho / pa.m)
+            pa.add_property('s', data=pa.p / (pa.rho**self.gamma))
+            pa.add_property('alpha', data=self.alphamin)
             pa.add_property('dv', stride=9)
             pa.add_property('dvaux', stride=9)
             pa.add_property('invdm', stride=9)
@@ -663,29 +669,33 @@ class SecondGradient(Equation):
                     d_ddv[dblkrowcol] = ddvblk[rowcol]
 
 
-class BalsaraSwitch(Equation):
-    def __init__(self, dest, sources, alphaav, fkern):
-        self.alphaav = alphaav
+class EntropyBasedDissipationTrigger(Equation):
+    def __init__(self, dest, sources, alphamax, alphamin, fkern, l0, l1,
+                 gamma):
+        self.alphamax = alphamax
         self.fkern = fkern
+        self.l0 = l0
+        self.l1 = l1
+        self.gamma = gamma
+        self.alphamin = alphamin
         super().__init__(dest, sources)
 
-    def post_loop(self, d_h, d_idx, d_cs, d_divv, d_dv, d_alpha):
-        curlv = declare('matrix(3)')
+    def post_loop(self, d_h, d_idx, d_cs, d_divv, d_dv, d_alpha, d_s,
+                  d_p, d_rho, dt, d_aalpha):
+        snew = d_p[d_idx] / pow(d_rho[d_idx], self.gamma)
+        tau = d_h[d_idx] / d_cs[d_idx]
+        epsdot = abs(d_s[d_idx] - snew) * tau / (d_s[d_idx] * dt)
+        d_s[d_idx] = snew
+        l = log(epsdot)
+        x = min(max((l - self.l0) / (self.l1 - self.l0), 0), 1)
+        sx = 6 * pow(x, 5) - 15 * pow(x, 4) + 10 * pow(x, 3)
+        alphades = self.alphamax * sx
+        if d_alpha[d_idx]>alphades:
+            d_aalpha[d_idx] = -(d_alpha[d_idx] - self.alphamin)/(30*tau)
+        else:
+            d_alpha[d_idx] = alphades
+            d_aalpha[d_idx] = 0.0
 
-        curlv[0] = 0
-        curlv[1] = 0
-        curlv[2] = 0
-
-        abscurlv = sqrt(curlv[0] * curlv[0] +
-                        curlv[1] * curlv[1] +
-                        curlv[2] * curlv[2])
-
-        absdivv = abs(d_divv[d_idx])
-
-        fhi = d_h[d_idx] * self.fkern
-
-        d_alpha[d_idx] = self.alphaav * absdivv / (
-                absdivv + abscurlv + 0.0001 * d_cs[d_idx] / fhi)
 
 
 class CorrectionMatrix(Equation):
@@ -927,7 +937,7 @@ class MomentumAndEnergyMI1(Equation):
                         (gmi[1] + gmj[1]) * (gmi[1] + gmj[1]) +
                         (gmi[2] + gmj[2]) * (gmi[2] + gmj[2]))
 
-        d_ae[d_idx] -= 0.5 * self.alphac * mj * vsigng * eij * normgmij/rhoij
+        d_ae[d_idx] -= 0.5 * self.alphac * mj * vsigng * eij * normgmij / rhoij
         d_ae[d_idx] += mj * pibrhoi2 * vijdotdwi
 
 
@@ -1057,7 +1067,7 @@ class PECStep(IntegratorStep):
 
     def initialize(self, d_idx, d_x0, d_y0, d_z0, d_x, d_y, d_z, d_h, d_u0,
                    d_v0, d_w0, d_u, d_v, d_w, d_e, d_e0, d_h0, d_converged,
-                   d_rho, d_rho0, d_n, d_n0):
+                   d_rho, d_rho0, d_n, d_n0, d_alpha, d_alpha0):
         d_x0[d_idx] = d_x[d_idx]
         d_y0[d_idx] = d_y[d_idx]
         d_z0[d_idx] = d_z[d_idx]
@@ -1071,13 +1081,15 @@ class PECStep(IntegratorStep):
         d_h0[d_idx] = d_h[d_idx]
         d_rho0[d_idx] = d_rho[d_idx]
         d_n0[d_idx] = d_n[d_idx]
+        d_alpha0[d_idx] = d_alpha[d_idx]
 
         # set the converged attribute to 0 at the beginning of a Group
         d_converged[d_idx] = 0
 
     def stage1(self, d_idx, d_x0, d_y0, d_z0, d_x, d_y, d_z, d_u0, d_v0, d_w0,
                d_u, d_v, d_w, d_e0, d_e, d_au, d_av, d_aw, d_ae, d_rho, d_rho0,
-               d_arho, d_h, d_h0, d_ah, dt, d_n, d_n0, d_an):
+               d_arho, d_h, d_h0, d_ah, dt, d_n, d_n0, d_an, d_alpha,
+               d_alpha0, d_aalpha):
         dtb2 = 0.5 * dt
 
         d_u[d_idx] = d_u0[d_idx] + dtb2 * d_au[d_idx]
@@ -1097,9 +1109,11 @@ class PECStep(IntegratorStep):
         d_h[d_idx] = d_h0[d_idx] + dtb2 * d_ah[d_idx]
         d_rho[d_idx] = d_rho0[d_idx] + dtb2 * d_arho[d_idx]
         d_n[d_idx] = d_n0[d_idx] + dtb2 * d_an[d_idx]
+        d_alpha[d_idx] = d_alpha0[d_idx] + dtb2 * d_aalpha[d_idx]
 
     def stage2(self, d_idx, d_x0, d_y0, d_z0, d_x, d_y, d_z, d_u0, d_v0, d_w0,
-               d_u, d_v, d_w, d_e0, d_e, d_au, d_av, d_aw, d_ae, dt):
+               d_u, d_v, d_w, d_e0, d_e, d_au, d_av, d_aw, d_ae, dt,
+               d_alpha, d_alpha0, d_aalpha):
         d_u[d_idx] = d_u0[d_idx] + dt * d_au[d_idx]
         d_v[d_idx] = d_v0[d_idx] + dt * d_av[d_idx]
         d_w[d_idx] = d_w0[d_idx] + dt * d_aw[d_idx]
@@ -1110,6 +1124,7 @@ class PECStep(IntegratorStep):
 
         # Update densities and smoothing lengths from the accelerations
         d_e[d_idx] = d_e0[d_idx] + dt * d_ae[d_idx]
+        d_alpha[d_idx] = d_alpha0[d_idx] + dt * d_aalpha[d_idx]
 
 
 @annotate(fst='int', lst='int', key='doublep', arr='longp')
