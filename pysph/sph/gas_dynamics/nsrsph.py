@@ -77,8 +77,7 @@ class NSRSPHScheme(Scheme):
             :math:`\\beta` for artificial viscosity, by default 2.0
         fkern : float, optional
             :math:`f_{kern}`, Factor to scale smoothing length for equivalence
-            with classic kernel when using kernel with altered
-            `radius_scale` is being used, by default 1.
+            when using kernel with altered `radius_scale`, by default 1.
         max_density_iterations : int, optional
             Maximum number of iterations to run for one density step,
             by default 250.
