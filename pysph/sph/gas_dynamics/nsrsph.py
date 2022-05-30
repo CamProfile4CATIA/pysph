@@ -307,6 +307,10 @@ class NSRSPHScheme(Scheme):
             self._ensure_properties(pa, solid_props, clean)
             pa.set_output_arrays(output_props)
 
+class IncreaseSmoothingLength(Equation):
+    def post_loop(self, d_idx, d_h):
+        d_h[d_idx] *= 1.10
+
 
 class UpdateSmoothingLength(Equation):
     def _get_helpers_(self):
@@ -983,11 +987,6 @@ class MomentumAndEnergyMI1(Equation):
         d_ae[d_idx] += mj * pibyrhoisq * vijdotdwi
 
 
-class IncreaseSmoothingLength(Equation):
-    def post_loop(self, d_idx, d_h):
-        d_h[d_idx] *= 1.10
-
-
 class WallBoundary(Equation):
     """
         :class:`WallBoundary
@@ -1221,19 +1220,15 @@ def quicksort(arr, key, fst=0, lst=3):
     Parameters
     ----------
     arr : list
-        indices to be sort
+        Array to be sorted.
     key : list
-        values in the increasing order of which `arr` will be sorted
+        Values in the increasing order of which `arr` will be sorted.
     fst : int
-        the index of the first element from arr and key to begin sorting from.
-        Must be in the range [0, len(xs))
+        The index of the first element from arr and key to begin sorting from.
+        Must be in the range [0, len(xs)).
     lst : int
-        the index of the last element from arr and key to begin sorting from.
-        Must be in the range [0, len(xs))
-
-    Returns
-    -------
-    None
+        The index of the last element from arr and key to begin sorting from.
+        Must be in the range [0, len(xs)).
 
     """
     i, j = declare('int', 2)
