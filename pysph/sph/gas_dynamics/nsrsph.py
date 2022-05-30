@@ -39,7 +39,7 @@ class NSRSPHScheme(Scheme):
                  max_density_iterations=250, alphamax=1.0, alphamin=0.1,
                  density_iteration_tolerance=1e-3, has_ghosts=False,
                  eta_crit=0.3, eta_fold=0.2, eps=0.01,
-                 adaptive_h_scheme='mpm'):
+                 adaptive_h_scheme=None):
         """
         Magma2 formulation of Rosswog.
 
@@ -115,6 +115,14 @@ class NSRSPHScheme(Scheme):
         self.eps = eps
 
     def add_user_options(self, group):
+        h_scheme_choices = ['magma2', 'mpm']
+        group.add_argument("--adaptive-h", action="store",
+                           dest="adaptive_h_scheme",
+                           default=h_scheme_choices[0],
+                           choices=h_scheme_choices,
+                           help="Specify scheme for adaptive smoothing "
+                            "lengths %s" % h_scheme_choices)
+
         group.add_argument("--alpha-max", action="store", type=float,
                            dest="alphamax", default=None,
                            help="alpha_max for the artificial viscosity "
@@ -128,7 +136,7 @@ class NSRSPHScheme(Scheme):
                            default=None, help="gamma for the state equation.")
 
     def consume_user_options(self, options):
-        vars = ['gamma', 'alphamax', 'beta']
+        vars = ['gamma', 'alphamax', 'beta', 'adaptive_h_scheme']
         data = dict((var, self._smart_getattr(options, var)) for var in vars)
         self.configure(**data)
 
@@ -172,6 +180,7 @@ class NSRSPHScheme(Scheme):
         # Find the optimal 'h'
 
         if self.adaptive_h_scheme == "magma2":
+            print('Using MAGMA2 procedure to adapt smoothing lengths')
             g1p0 = []
             for fluid in self.fluids:
                 g1p0.append(IncreaseSmoothingLength(dest=fluid, sources=None))
@@ -181,28 +190,39 @@ class NSRSPHScheme(Scheme):
             for fluid in self.fluids:
                 g1p1.append(UpdateSmoothingLength(dest=fluid, sources=all_pa))
             equations.append(Group(equations=g1p1))
-            ioo = True
 
-        else:
-            ioo = False
+            from pysph.sph.basic_equations import SummationDensity
 
-        g1p2 = []
-        for fluid in self.fluids:
-            g1p2.append(SummationDensity(
-                dest=fluid, sources=all_pa, hfact=self.hfact,
-                density_iterations=True, dim=self.dim, iterate_only_once=ioo,
-                htol=self.density_iteration_tolerance))
-            equations.append(Group(
-                equations=g1p2, update_nnps=True, iterate=True,
-                max_iterations=self.max_density_iterations))
+            g2 = []
+            for fluid in self.fluids:
+                g2.append(SummationDensity(dest=fluid, sources=all_pa))
+                g2.append(IdealGasEOS(dest=fluid, sources=None,
+                                      gamma=self.gamma))
+                g2.append(AuxillaryGradient(dest=fluid, sources=all_pa,
+                                            dim=self.dim))
+            equations.append(Group(equations=g2))
 
-        g2 = []
-        for fluid in self.fluids:
-            g2.append(
-                AuxillaryGradient(dest=fluid, sources=all_pa, dim=self.dim))
-            g2.append(
-                IdealGasEOS(dest=fluid, sources=None, gamma=self.gamma))
-        equations.append(Group(equations=g2))
+        elif self.adaptive_h_scheme == "mpm":
+            print('Using MPM procedure to adapt smoothing lengths')
+            g1 = []
+            for fluid in self.fluids:
+                g1.append(SummationDensityMPMStyle(
+                    dest=fluid, sources=all_pa, hfact=self.hfact,
+                    density_iterations=True, dim=self.dim,
+                    htol=self.density_iteration_tolerance))
+                equations.append(Group(
+                    equations=g1, update_nnps=True, iterate=True,
+                    max_iterations=self.max_density_iterations))
+
+                g2 = []
+                for fluid in self.fluids:
+                    g2.append(
+                        IdealGasEOS(dest=fluid, sources=None,
+                                    gamma=self.gamma))
+                    g2.append(
+                        AuxillaryGradient(dest=fluid, sources=all_pa,
+                                          dim=self.dim))
+                equations.append(Group(equations=g2))
 
         g3p1 = []
         for fluid in self.fluids:
@@ -310,7 +330,7 @@ class UpdateSmoothingLength(Equation):
         d_h[d_idx] = rij[10] / SPH_KERNEL.radius_scale
 
 
-class SummationDensity(Equation):
+class SummationDensityMPMStyle(Equation):
     def __init__(self, dest, sources, dim, density_iterations=False,
                  iterate_only_once=False, hfact=1.2, htol=1e-6):
         """
@@ -437,7 +457,7 @@ class IdealGasEOS(Equation):
         self.gamma1 = gamma - 1.0
         super(IdealGasEOS, self).__init__(dest, sources)
 
-    def initialize(self, d_idx, d_p, d_rho, d_e, d_cs):
+    def post_loop(self, d_idx, d_p, d_rho, d_e, d_cs):
         d_p[d_idx] = self.gamma1 * d_rho[d_idx] * d_e[d_idx]
         d_cs[d_idx] = sqrt(self.gamma * d_p[d_idx] / d_rho[d_idx])
 
@@ -756,6 +776,7 @@ class CorrectionMatrix(Equation):
                 rowcol = row * dim + col
                 drowcol = dsi2 + rowcol
                 d_cm[drowcol] = cm[rowcol]
+
 
 class EvaluateTildeMu(Equation):
     def _get_helpers_(self):
