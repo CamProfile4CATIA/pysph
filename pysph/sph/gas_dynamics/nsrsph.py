@@ -1193,16 +1193,28 @@ class TVDRK2Integrator(Integrator):
 
 @annotate(fst='int', lst='int', key='doublep', arr='longp')
 def quicksort(arr, key, fst=0, lst=3):
-    '''
+    """
     Sort in-place with QuickSort
+    Thanks https://stackoverflow.com/a/31102672
 
-    :param key:  the list of numbers to sort
-    :param fst: the first index from xs to begin sorting from,
-                must be in the range [0, len(arr))
-    :param lst: the last index from xs to stop sorting at
-                must be in the range [fst, len(arr))
-    :return:    nothing, the side effect is that arr[fst, lst] is sorted
-    '''
+    Parameters
+    ----------
+    arr : list
+        indices to be sort
+    key : list
+        values in the increasing order of which `arr` will be sorted
+    fst : int
+        the index of the first element from arr and key to begin sorting from.
+        Must be in the range [0, len(xs))
+    lst : int
+        the index of the last element from arr and key to begin sorting from.
+        Must be in the range [0, len(xs))
+
+    Returns
+    -------
+    None
+
+    """
     i, j = declare('int', 2)
     if fst >= lst:
         return
