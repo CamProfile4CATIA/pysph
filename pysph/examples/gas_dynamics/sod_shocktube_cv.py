@@ -135,7 +135,7 @@ class SodShockTube(ShockTubeSetup):
             scheme.configure(kernel_factor=self.hdx)
         elif self.options.scheme in ['psph', 'tsph', 'nsrsph']:
             scheme.configure(hfact=self.hdx)
-        scheme.configure_solver(tf=self.tf, dt=self.dt)
+        scheme.configure_solver(tf=self.tf, adaptive_timestep=True)
 
     def create_scheme(self):
         adke = ADKEScheme(

@@ -38,7 +38,7 @@ class NSRSPHScheme(Scheme):
     def __init__(self, fluids, solids, dim, gamma, hfact, beta=2.0, fkern=1.0,
                  max_density_iterations=250, alphamax=1.0, alphamin=0.1,
                  density_iteration_tolerance=1e-3, has_ghosts=False,
-                 eta_crit=0.3, eta_fold=0.2, eps = 0.01,
+                 eta_crit=0.3, eta_fold=0.2, eps=0.01,
                  adaptive_h_scheme='mpm'):
         """
         Magma2 formulation of Rosswog.
@@ -241,8 +241,9 @@ class NSRSPHScheme(Scheme):
                                            fkern=self.fkern,
                                            eta_crit=self.eta_crit,
                                            eta_fold=self.eta_fold,
-                                           eps = self.eps))
-
+                                           eps=self.eps))
+            g5.append(EvaluateTildeMu(dest=fluid, sources=all_pa,
+                                      dim=self.dim))
         equations.append(Group(equations=g5))
 
         return equations
@@ -257,7 +258,7 @@ class NSRSPHScheme(Scheme):
                  'w0', 'x0', 'y0', 'z0']
         more_props = ['drhosumdh', 'n', 'dndh', 'prevn', 'prevdndh',
                       'prevdrhosumdh', 'divv', 'an', 'n0', 'alpha0',
-                      'aalpha']
+                      'aalpha', 'tilmu', 'dt_adapt']
         props.extend(more_props)
         output_props = 'rho p u v w x y z e n divv h alpha'.split(' ')
         for fluid in self.fluids:
@@ -266,7 +267,7 @@ class NSRSPHScheme(Scheme):
             pa.add_property('orig_idx', type='int')
             # Guess for number density.
             pa.add_property('n', data=pa.rho / pa.m)
-            pa.add_property('s', data=pa.p / (pa.rho**self.gamma))
+            pa.add_property('s', data=pa.p / (pa.rho ** self.gamma))
             pa.add_property('alpha', data=self.alphamin)
             pa.add_property('dv', stride=9)
             pa.add_property('dvaux', stride=9)
@@ -695,12 +696,11 @@ class EntropyBasedDissipationTrigger(Equation):
         x = min(max((l - self.l0) / (self.l1 - self.l0), 0), 1)
         sx = 6 * pow(x, 5) - 15 * pow(x, 4) + 10 * pow(x, 3)
         alphades = self.alphamax * sx
-        if d_alpha[d_idx]>alphades:
-            d_aalpha[d_idx] = -(d_alpha[d_idx] - self.alphamin)/(30*tau)
+        if d_alpha[d_idx] > alphades:
+            d_aalpha[d_idx] = -(d_alpha[d_idx] - self.alphamin) / (30 * tau)
         else:
             d_alpha[d_idx] = alphades
             d_aalpha[d_idx] = 0.0
-
 
 
 class CorrectionMatrix(Equation):
@@ -757,13 +757,28 @@ class CorrectionMatrix(Equation):
                 drowcol = dsi2 + rowcol
                 d_cm[drowcol] = cm[rowcol]
 
+class EvaluateTildeMu(Equation):
+    def _get_helpers_(self):
+        return [dot]
+
+    def __init__(self, dest, sources, dim):
+        self.dim = dim
+        super().__init__(dest, sources)
+
+    def initialize(self, d_idx, d_tilmu):
+        d_tilmu[d_idx] = -INFINITY
+
+    def loop(self, d_tilmu, d_idx, d_h, VIJ, XIJ, R2IJ):
+        d_tilmu[d_idx] = max(d_tilmu[d_idx], d_h[d_idx] *
+                             dot(VIJ, XIJ, self.dim) / (R2IJ + 0.01))
+
 
 class MomentumAndEnergyMI1(Equation):
     def _get_helpers_(self):
         return [mat_vec_mult, dot]
 
     def __init__(self, dest, sources, dim, fkern, eta_crit=0.3, eta_fold=0.2,
-                 beta=2.0, alphac=0.05, eps = 0.01):
+                 beta=2.0, alphac=0.05, eps=0.01):
         r"""
         Momentum and Energy Equations with artificial viscosity.
 
@@ -1118,7 +1133,8 @@ class TVDRK2Step(IntegratorStep):
 
     def stage2(self, d_idx, d_x0, d_y0, d_z0, d_x, d_y, d_z, d_u0, d_v0, d_w0,
                d_u, d_v, d_w, d_e0, d_e, d_au, d_av, d_aw, d_ae, dt,
-               d_alpha, d_alpha0, d_aalpha):
+               d_alpha, d_alpha0, d_aalpha, d_h, d_tilmu, d_cs,
+               d_dt_adapt):
         d_u[d_idx] = 0.5 * (d_u[d_idx] + d_u0[d_idx] + dt * d_au[d_idx])
         d_v[d_idx] = 0.5 * (d_v[d_idx] + d_v0[d_idx] + dt * d_av[d_idx])
         d_w[d_idx] = 0.5 * (d_w[d_idx] + d_w0[d_idx] + dt * d_aw[d_idx])
@@ -1129,7 +1145,19 @@ class TVDRK2Step(IntegratorStep):
 
         # Update densities and smoothing lengths from the accelerations
         d_e[d_idx] = 0.5 * (d_e[d_idx] + d_e0[d_idx] + dt * d_ae[d_idx])
-        d_alpha[d_idx] = 0.5 * (d_alpha[d_idx] + d_alpha0[d_idx] + dt * d_aalpha[d_idx])
+        d_alpha[d_idx] = 0.5 * (
+                    d_alpha[d_idx] + d_alpha0[d_idx] + dt * d_aalpha[d_idx])
+
+        fmag = sqrt(d_au[d_idx] * d_au[d_idx] +
+                    d_av[d_idx] * d_av[d_idx] +
+                    d_aw[d_idx] * d_aw[d_idx])
+
+        dt_force = sqrt(d_h[d_idx]/fmag)
+        dt_courant_visc = d_h[d_idx] / (d_cs[d_idx] + 0.6 * d_alpha[d_idx] *
+                                        (d_cs[d_idx] + 2.0 * d_tilmu[d_idx]))
+
+        d_dt_adapt[d_idx] = 0.2 * min(dt_force, dt_courant_visc)
+
 
 class TVDRK2Integrator(Integrator):
     r"""
@@ -1152,8 +1180,7 @@ class TVDRK2Integrator(Integrator):
         self.update_domain()
 
         # Call any post-stage functions.
-        self.do_post_stage(0.5*dt, 1)
-
+        self.do_post_stage(0.5 * dt, 1)
         self.compute_accelerations()
 
         # Correct
