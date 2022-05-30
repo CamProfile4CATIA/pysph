@@ -925,17 +925,17 @@ class MomentumAndEnergyMI1(Equation):
         mj = s_m[s_idx]
 
         # p_i/rhoi**2
-        rhoi2 = d_rho[d_idx] * d_rho[d_idx]
-        pibrhoi2 = (d_p[d_idx] + qi) / rhoi2
+        rhoisq = d_rho[d_idx] * d_rho[d_idx]
+        pibyrhoisq = (d_p[d_idx] + qi) / rhoisq
 
         # pj/rhoj**2
-        rhoj2 = s_rho[s_idx] * s_rho[s_idx]
-        pjbrhoj2 = (s_p[s_idx] + qj) / rhoj2
+        rhojsq = s_rho[s_idx] * s_rho[s_idx]
+        pjbyrhojsq = (s_p[s_idx] + qj) / rhojsq
 
         # accelerations for velocity
-        d_au[d_idx] -= mj * (pibrhoi2 * gmi[0] + pjbrhoj2 * gmj[0])
-        d_av[d_idx] -= mj * (pibrhoi2 * gmi[1] + pjbrhoj2 * gmj[1])
-        d_aw[d_idx] -= mj * (pibrhoi2 * gmi[2] + pjbrhoj2 * gmj[2])
+        d_au[d_idx] -= mj * (pibyrhoisq * gmi[0] + pjbyrhojsq * gmj[0])
+        d_av[d_idx] -= mj * (pibyrhoisq * gmi[1] + pjbyrhojsq * gmj[1])
+        d_aw[d_idx] -= mj * (pibyrhoisq * gmi[2] + pjbyrhojsq * gmj[2])
 
         # accelerations for the thermal energy
         vijdotdwi = dot(VIJ, gmi, dim)
@@ -944,7 +944,7 @@ class MomentumAndEnergyMI1(Equation):
                         (gmi[2] + gmj[2]) * (gmi[2] + gmj[2]))
 
         d_ae[d_idx] -= 0.5 * self.alphac * mj * vsigng * eij * normgmij * RHOIJ1
-        d_ae[d_idx] += mj * pibrhoi2 * vijdotdwi
+        d_ae[d_idx] += mj * pibyrhoisq * vijdotdwi
 
 
 class IncreaseSmoothingLength(Equation):
