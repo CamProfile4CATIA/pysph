@@ -276,8 +276,8 @@ class NSRSPHScheme(Scheme):
                  'au', 'av', 'aw', 'ae', 'pid', 'gid', 'tag', 'dwdh', 'h0',
                  'converged', 'ah', 'arho', 'dt_cfl', 'e0', 'rho0', 'u0', 'v0',
                  'w0', 'x0', 'y0', 'z0']
-        more_props = ['drhosumdh', 'n', 'dndh', 'prevn', 'prevdndh',
-                      'prevdrhosumdh', 'divv', 'an', 'n0', 'alpha0',
+        more_props = ['n', 'dndh', 'prevn', 'prevdndh',
+                      'divv', 'an', 'n0', 'alpha0',
                       'aalpha', 'tilmu', 'dt_adapt']
         props.extend(more_props)
         output_props = 'rho p u v w x y z e n divv h alpha'.split(' ')
@@ -354,17 +354,15 @@ class SummationDensityMPMStyle(Equation):
 
         super().__init__(dest, sources)
 
-    def initialize(self, d_idx, d_rho, d_arho, d_drhosumdh, d_n, d_dndh,
-                   d_prevn, d_prevdndh, d_prevdrhosumdh, d_an):
+    def initialize(self, d_idx, d_rho, d_arho, d_n, d_dndh,
+                   d_prevn, d_prevdndh, d_an):
 
         d_rho[d_idx] = 0.0
         d_arho[d_idx] = 0.0
 
         d_prevn[d_idx] = d_n[d_idx]
-        d_prevdrhosumdh[d_idx] = d_drhosumdh[d_idx]
         d_prevdndh[d_idx] = d_dndh[d_idx]
 
-        d_drhosumdh[d_idx] = 0.0
         d_n[d_idx] = 0.0
         d_an[d_idx] = 0.0
         d_dndh[d_idx] = 0.0
@@ -374,9 +372,8 @@ class SummationDensityMPMStyle(Equation):
         # to False. The Group can therefore iterate till convergence.
         self.equation_has_converged = 1
 
-    def loop(self, d_idx, s_idx, d_rho, d_arho, d_drhosumdh, s_m, VIJ, WI, DWI,
-             GHI, d_n, d_dndh, d_h, d_prevn, d_prevdndh, d_prevdrhosumdh,
-             d_an):
+    def loop(self, d_idx, s_idx, d_rho, d_arho, s_m, VIJ, WI, DWI,
+             GHI, d_n, d_dndh, d_h, d_prevn, d_prevdndh, d_an):
 
         mj = s_m[s_idx]
         vijdotdwij = VIJ[0] * DWI[0] + VIJ[1] * DWI[1] + VIJ[2] * DWI[2]
@@ -384,19 +381,10 @@ class SummationDensityMPMStyle(Equation):
         # density
         d_rho[d_idx] += mj * WI
 
-        # density accelerations
-        # hibynidim = d_h[d_idx] / (d_prevn[d_idx] * self.dim)
-        # inbrkti = 1 + d_prevdndh[d_idx] * hibynidim
-        # inprthsi = d_prevdrhosumdh[d_idx] * hibynidim
-        # fij = 1 - inprthsi / (s_m[s_idx] * inbrkti)
-
-        fij = 1
-        vijdotdwij_fij = vijdotdwij * fij
-        d_arho[d_idx] += mj * vijdotdwij_fij
-        d_an[d_idx] += vijdotdwij_fij
+        d_arho[d_idx] += mj * vijdotdwij
+        d_an[d_idx] += vijdotdwij
 
         # gradient of kernel w.r.t h
-        d_drhosumdh[d_idx] += mj * GHI
         d_n[d_idx] += WI
         d_dndh[d_idx] += GHI
 
@@ -860,8 +848,8 @@ class MomentumAndEnergyMI1(Equation):
 
     def loop(self, d_idx, s_idx, d_m, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
              d_au, d_av, d_aw, d_ae, XIJ, VIJ, HIJ, d_alpha, s_alpha,
-             R2IJ, RHOIJ1, d_h, d_dndh, d_n, d_drhosumdh, s_h, s_dndh, s_n,
-             s_drhosumdh, d_cm, s_cm, WI, WJ, d_u, d_v, d_w, s_u, s_v,
+             R2IJ, RHOIJ1, d_h, d_dndh, d_n,s_h, s_dndh, s_n,
+             d_cm, s_cm, WI, WJ, d_u, d_v, d_w, s_u, s_v,
              s_w, d_dv, s_dv, d_ddv, s_ddv, d_de, s_de, d_dde, s_dde, d_e,
              s_e, RHOIJ):
 
@@ -998,7 +986,7 @@ class WallBoundary(Equation):
     """
 
     def initialize(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_h, d_htmp, d_h0,
-                   d_u, d_v, d_w, d_wij, d_n, d_dndh, d_drhosumdh, d_divv,
+                   d_u, d_v, d_w, d_wij, d_n, d_dndh, d_divv,
                    d_m0):
         d_p[d_idx] = 0.0
         d_u[d_idx] = 0.0
@@ -1015,12 +1003,11 @@ class WallBoundary(Equation):
         d_htmp[d_idx] = 0.0
         d_n[d_idx] = 0.0
         d_dndh[d_idx] = 0.0
-        d_drhosumdh[d_idx] = 0.0
+
 
     def loop(self, d_idx, s_idx, d_p, d_rho, d_e, d_m, d_cs, d_divv, d_h, d_u,
              d_v, d_w, d_wij, d_htmp, s_p, s_rho, s_e, s_m, s_cs, s_h, s_divv,
-             s_u, s_v, s_w, WI, s_n, d_n, s_dndh, d_dndh, d_drhosumdh,
-             s_drhosumdh):
+             s_u, s_v, s_w, WI, s_n, d_n, s_dndh, d_dndh):
         d_wij[d_idx] += WI
         d_p[d_idx] += s_p[s_idx] * WI
         d_u[d_idx] -= s_u[s_idx] * WI
@@ -1034,10 +1021,10 @@ class WallBoundary(Equation):
         d_htmp[d_idx] += s_h[s_idx] * WI
         d_n[d_idx] += s_n[s_idx] * WI
         d_dndh[d_idx] += s_dndh[s_idx] * WI
-        d_drhosumdh[d_idx] += s_drhosumdh[s_idx] * WI
+
 
     def post_loop(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_divv, d_h, d_u,
-                  d_v, d_w, d_wij, d_htmp, d_n, d_dndh, d_drhosumdh, d_m0):
+                  d_v, d_w, d_wij, d_htmp, d_n, d_dndh, d_m0):
         if d_wij[d_idx] > 1e-30:
             d_p[d_idx] = d_p[d_idx] / d_wij[d_idx]
             d_u[d_idx] = d_u[d_idx] / d_wij[d_idx]
@@ -1051,7 +1038,6 @@ class WallBoundary(Equation):
             d_h[d_idx] = d_htmp[d_idx] / d_wij[d_idx]
             d_n[d_idx] = d_n[d_idx] / d_wij[d_idx]
             d_dndh[d_idx] = d_dndh[d_idx] / d_wij[d_idx]
-            d_drhosumdh[d_idx] = d_drhosumdh[d_idx] / d_wij[d_idx]
 
         # Secret Sauce
         if d_m[d_idx] < 1e-10:
