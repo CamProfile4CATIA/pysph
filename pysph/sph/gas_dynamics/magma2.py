@@ -739,11 +739,11 @@ class EntropyBasedDissipationTrigger(Equation):
         epsdot = abs(d_s[d_idx] - snew) * tau / (d_s[d_idx] * dt)
         d_s[d_idx] = snew
         l = log(epsdot)
-        x = min(max((l - self.l0) / (self.l1 - self.l0), 0), 1)
-        sx = 6 * pow(x, 5) - 15 * pow(x, 4) + 10 * pow(x, 3)
+        x = min(max((l - self.l0) / (self.l1 - self.l0), 0.0), 1.0)
+        sx = ((6.0 * x - 15.0) * x + 10.0) * x * x * x
         alphades = self.alphamax * sx
         if d_alpha[d_idx] > alphades:
-            d_aalpha[d_idx] = -(d_alpha[d_idx] - self.alphamin) / (30 * tau)
+            d_aalpha[d_idx] = -(d_alpha[d_idx] - self.alphamin) / (30.0 * tau)
         else:
             d_alpha[d_idx] = alphades
             d_aalpha[d_idx] = 0.0
