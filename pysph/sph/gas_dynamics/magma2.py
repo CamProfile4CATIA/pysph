@@ -27,7 +27,7 @@ from math import *
 from pysph.sph.equation import Equation
 from pysph.sph.integrator import Integrator
 from pysph.sph.integrator_step import IntegratorStep
-from pysph.sph.scheme import Scheme
+from pysph.sph.scheme import Scheme, add_bool_argument
 from pysph.sph.wc.linalg import (augmented_matrix, gj_solve, identity,
                                  mat_mult, mat_vec_mult, dot)
 
@@ -39,7 +39,8 @@ class MAGMA2Scheme(Scheme):
                  adaptive_h_scheme='magma2', max_density_iterations=250,
                  density_iteration_tolerance=1e-3, alphamax=1.0, alphamin=0.1,
                  alphac=0.05, beta=2.0, eps=0.01, eta_crit=0.3, eta_fold=0.2,
-                 fkern=1.0, ndes=300, has_ghosts=False):
+                 fkern=1.0, ndes=300, recycle_accelerations=True,
+                 has_ghosts=False):
         """
         Magma2 formulation of Rosswog.
 
@@ -92,10 +93,14 @@ class MAGMA2Scheme(Scheme):
             :math:`f_{kern}`, Factor to scale smoothing length for equivalence
             when using kernel with altered `radius_scale`, by default 1.0.
         ndes : int, optional
-             :math:`n_{des}`, Desired Number of neighbours to be in the kernel
-             support of each particle, by default 300 for 3D.
+            :math:`n_{des}`, Desired Number of neighbours to be in the kernel
+            support of each particle, by default 300 for 3D.
+        recycle_accelerations : bool, optional
+            Weather to recycle accelerations, i.e., weather the accelerations
+            used in the correction step can be reused in the successive
+            prediction step, by default True.
         has_ghosts : bool, optional
-            if ghost particles (either mirror or periodic) is used, by default
+            If ghost particles (either mirror or periodic) is used, by default
             False
         """
 
@@ -116,6 +121,7 @@ class MAGMA2Scheme(Scheme):
         self.eta_crit = eta_crit
         self.eta_fold = eta_fold
         self.eps = eps
+        self.recycle_accelerations = recycle_accelerations
         self.ndes = ndes
 
     def add_user_options(self, group):
@@ -143,9 +149,15 @@ class MAGMA2Scheme(Scheme):
                            default=None, help="Desired Number of neighbours to"
                                               " be in the kernel support of "
                                               "each particle.")
+        add_bool_argument(group, 'recycle-accelerations',
+                          dest='recycle_accelerations', default=None,
+                          help="Reuse accelerations used in the "
+                               "correction step in the successive "
+                               "prediction step.")
 
     def consume_user_options(self, options):
-        vars = ['gamma', 'alphamax', 'beta', 'adaptive_h_scheme', 'ndes']
+        vars = ['gamma', 'alphamax', 'beta', 'adaptive_h_scheme', 'ndes',
+                'recycle_accelerations']
         data = dict((var, self._smart_getattr(options, var)) for var in vars)
         self.configure(**data)
 
@@ -172,7 +184,11 @@ class MAGMA2Scheme(Scheme):
         if integrator_cls is not None:
             int_cls = integrator_cls
         else:
-            int_cls = TVDRK2Integrator
+            if self.recycle_accelerations:
+                int_cls = TVDRK2IntegratorWithRecycling
+            else:
+                int_cls = TVDRK2Integrator
+
         step_cls = TVDRK2Step
         for name in self.fluids:
             if name not in steppers:
@@ -1187,11 +1203,9 @@ class TVDRK2Integrator(Integrator):
 
     .. math::
 
-        y^{*} = y^n + \Delta t f(y^{n}
-        y^{n+1} = 0.5 * (y^n + y^{*} + \Delta t f(y^{*})
+        y^{*} = y^n + \Delta t f(y^{n})
 
-        y^{n + 1} = y^n + \Delta t F(y^{n+\frac{1}{2}})
-
+        y^{n+1} = 0.5 (y^n + y^{*} + \Delta t f(y^{*}))
     """
 
     def one_timestep(self, t, dt):
@@ -1213,6 +1227,34 @@ class TVDRK2Integrator(Integrator):
         # Call any post-stage functions.
         self.do_post_stage(dt, 2)
 
+class TVDRK2IntegratorWithRecycling(Integrator):
+    r"""
+    The system is advanced using:
+
+    .. math::
+
+        y^{*,n} = y^n + \Delta t f(y^{*,n-1})
+
+        y^{n+1} = 0.5 (y^n + y^{*} + \Delta t f(y^{*,n}))
+    """
+
+    def one_timestep(self, t, dt):
+        self.initialize()
+
+        # Predict
+        self.stage1()
+        self.update_domain()
+
+        # Call any post-stage functions.
+        self.do_post_stage(0.5 * dt, 1)
+        self.compute_accelerations()
+
+        # Correct
+        self.stage2()
+        self.update_domain()
+
+        # Call any post-stage functions.
+        self.do_post_stage(dt, 2)
 
 @annotate(fst='int', lst='int', key='doublep', arr='longp')
 def quicksort(arr, key, fst=0, lst=3):
