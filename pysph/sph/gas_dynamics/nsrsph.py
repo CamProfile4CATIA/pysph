@@ -39,12 +39,12 @@ class NSRSPHScheme(Scheme):
                  max_density_iterations=250, alphamax=1.0, alphamin=0.1,
                  density_iteration_tolerance=1e-3, has_ghosts=False,
                  eta_crit=0.3, eta_fold=0.2, eps=0.01,
-                 adaptive_h_scheme=None):
+                 adaptive_h_scheme='magma2', ndes=300):
         """
         Magma2 formulation of Rosswog.
 
         Ref
-        Final set of Equations: [Rosswog2020b]_
+        Set of Equations: [Rosswog2020b]_
         Dissipation Limiter: [Rosswog2020a]_
 
         Notes
@@ -113,15 +113,16 @@ class NSRSPHScheme(Scheme):
         self.eta_crit = eta_crit
         self.eta_fold = eta_fold
         self.eps = eps
+        self.ndes = ndes
 
     def add_user_options(self, group):
         h_scheme_choices = ['magma2', 'mpm']
         group.add_argument("--adaptive-h", action="store",
                            dest="adaptive_h_scheme",
-                           default=h_scheme_choices[0],
+                           default=None,
                            choices=h_scheme_choices,
                            help="Specify scheme for adaptive smoothing "
-                            "lengths %s" % h_scheme_choices)
+                                "lengths %s" % h_scheme_choices)
 
         group.add_argument("--alpha-max", action="store", type=float,
                            dest="alphamax", default=None,
@@ -135,8 +136,13 @@ class NSRSPHScheme(Scheme):
         group.add_argument("--gamma", action="store", type=float, dest="gamma",
                            default=None, help="gamma for the state equation.")
 
+        group.add_argument("--n-des", action="store", type=float, dest="ndes",
+                           default=None, help="Number of neighbours designated"
+                                              " to be in the kernel support of"
+                                              " each particle.")
+
     def consume_user_options(self, options):
-        vars = ['gamma', 'alphamax', 'beta', 'adaptive_h_scheme']
+        vars = ['gamma', 'alphamax', 'beta', 'adaptive_h_scheme', 'ndes']
         data = dict((var, self._smart_getattr(options, var)) for var in vars)
         self.configure(**data)
 
@@ -188,7 +194,8 @@ class NSRSPHScheme(Scheme):
 
             g1p1 = []
             for fluid in self.fluids:
-                g1p1.append(UpdateSmoothingLength(dest=fluid, sources=all_pa))
+                g1p1.append(UpdateSmoothingLength(dest=fluid, sources=all_pa,
+                                                  ndes=self.ndes))
             equations.append(Group(equations=g1p1))
 
             from pysph.sph.basic_equations import SummationDensity
@@ -307,18 +314,24 @@ class NSRSPHScheme(Scheme):
             self._ensure_properties(pa, solid_props, clean)
             pa.set_output_arrays(output_props)
 
+
 class IncreaseSmoothingLength(Equation):
     def post_loop(self, d_idx, d_h):
         d_h[d_idx] *= 1.10
 
 
 class UpdateSmoothingLength(Equation):
+    def __init__(self, dest, sources, ndes):
+        self.ndes = int(ndes)
+        super().__init__(dest, sources)
+
     def _get_helpers_(self):
         return [quicksort]
 
     def loop_all(self, d_idx, d_x, d_y, d_z, d_rho, d_h,
                  s_m, s_x, s_y, s_z, s_h, NBRS, N_NBRS, SPH_KERNEL):
-        i = declare('int')
+        i, ndes = declare('int', 2)
+        ndes = self.ndes
         s_idx = declare('long')
         xij = declare('matrix(3)')
         rij = declare('matrix(500)')
@@ -330,8 +343,8 @@ class UpdateSmoothingLength(Equation):
             xij[2] = d_z[d_idx] - s_z[s_idx]
             rij[i] = sqrt(xij[0] * xij[0] + xij[1] * xij[1] + xij[2] * xij[2])
             nidx[i] = s_idx
-        quicksort(nidx, rij, 0, N_NBRS)
-        d_h[d_idx] = rij[10] / SPH_KERNEL.radius_scale
+        quicksort(nidx, rij, 0, N_NBRS - 1)
+        d_h[d_idx] = rij[ndes] / SPH_KERNEL.radius_scale
 
 
 class SummationDensityMPMStyle(Equation):
@@ -388,9 +401,8 @@ class SummationDensityMPMStyle(Equation):
         d_n[d_idx] += WI
         d_dndh[d_idx] += GHI
 
-    def post_loop(self, d_idx, d_h0, d_h, d_ah, d_converged, d_n, d_dndh,
-                  d_an):
-        # iteratively find smoothing length consistent with the
+    def post_loop(self, d_idx, d_h0, d_h, d_ah, d_converged, d_n, d_dndh, d_an):
+        # iteratively find smoothing length
         if self.density_iterations:
             if not (d_converged[d_idx] == 1):
                 hi = d_h[d_idx]
@@ -848,7 +860,7 @@ class MomentumAndEnergyMI1(Equation):
 
     def loop(self, d_idx, s_idx, d_m, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
              d_au, d_av, d_aw, d_ae, XIJ, VIJ, HIJ, d_alpha, s_alpha,
-             R2IJ, RHOIJ1, d_h, d_dndh, d_n,s_h, s_dndh, s_n,
+             R2IJ, RHOIJ1, d_h, d_dndh, d_n, s_h, s_dndh, s_n,
              d_cm, s_cm, WI, WJ, d_u, d_v, d_w, s_u, s_v,
              s_w, d_dv, s_dv, d_ddv, s_ddv, d_de, s_de, d_dde, s_dde, d_e,
              s_e, RHOIJ):
@@ -1117,7 +1129,6 @@ class TVDRK2Step(IntegratorStep):
                d_u, d_v, d_w, d_e0, d_e, d_au, d_av, d_aw, d_ae, d_rho, d_rho0,
                d_arho, d_h, d_h0, d_ah, dt, d_n, d_n0, d_an, d_alpha,
                d_alpha0, d_aalpha):
-
         d_u[d_idx] = d_u0[d_idx] + dt * d_au[d_idx]
         d_v[d_idx] = d_v0[d_idx] + dt * d_av[d_idx]
         d_w[d_idx] = d_w0[d_idx] + dt * d_aw[d_idx]
@@ -1152,13 +1163,13 @@ class TVDRK2Step(IntegratorStep):
         # Update densities and smoothing lengths from the accelerations
         d_e[d_idx] = 0.5 * (d_e[d_idx] + d_e0[d_idx] + dt * d_ae[d_idx])
         d_alpha[d_idx] = 0.5 * (
-                    d_alpha[d_idx] + d_alpha0[d_idx] + dt * d_aalpha[d_idx])
+                d_alpha[d_idx] + d_alpha0[d_idx] + dt * d_aalpha[d_idx])
 
         fmag = sqrt(d_au[d_idx] * d_au[d_idx] +
                     d_av[d_idx] * d_av[d_idx] +
                     d_aw[d_idx] * d_aw[d_idx])
 
-        dt_force = sqrt(d_h[d_idx]/fmag)
+        dt_force = sqrt(d_h[d_idx] / fmag)
         dt_courant_visc = d_h[d_idx] / (d_cs[d_idx] + 0.6 * d_alpha[d_idx] *
                                         (d_cs[d_idx] + 2.0 * d_tilmu[d_idx]))
 
@@ -1177,6 +1188,7 @@ class TVDRK2Integrator(Integrator):
         y^{n + 1} = y^n + \Delta t F(y^{n+\frac{1}{2}})
 
     """
+
     def one_timestep(self, t, dt):
         self.initialize()
 

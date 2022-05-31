@@ -135,7 +135,7 @@ class SodShockTube(ShockTubeSetup):
             scheme.configure(kernel_factor=self.hdx)
         elif self.options.scheme in ['psph', 'tsph', 'nsrsph']:
             scheme.configure(hfact=self.hdx)
-        scheme.configure_solver(tf=self.tf, adaptive_timestep=True)
+        scheme.configure_solver(tf=self.tf, dt=self.dt)
 
     def create_scheme(self):
         adke = ADKEScheme(
@@ -171,7 +171,7 @@ class SodShockTube(ShockTubeSetup):
 
         nsrsph = NSRSPHScheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            hfact=None, has_ghosts=True
+            hfact=None, has_ghosts=True, ndes=7
         )
 
         s = SchemeChooser(
