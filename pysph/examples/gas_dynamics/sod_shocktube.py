@@ -4,7 +4,7 @@ from pysph.examples.gas_dynamics.shocktube_setup import ShockTubeSetup
 from pysph.sph.scheme import ADKEScheme, GasDScheme, GSPHScheme, SchemeChooser
 from pysph.sph.gas_dynamics.psph import PSPHScheme
 from pysph.sph.gas_dynamics.tsph import TSPHScheme
-from pysph.sph.gas_dynamics.nsrsph import NSRSPHScheme
+from pysph.sph.gas_dynamics.magma2 import MAGMA2Scheme
 from pysph.sph.wc.crksph import CRKSPHScheme
 from pysph.base.nnps import DomainManager
 
@@ -112,7 +112,7 @@ class SodShockTube(ShockTubeSetup):
             hfact=None
         )
 
-        nsrsph = NSRSPHScheme(
+        nsrsph = MAGMA2Scheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
             hfact=None, has_ghosts=True
         )

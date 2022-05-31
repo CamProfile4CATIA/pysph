@@ -96,6 +96,14 @@ Hopkins' ‘Modern’ SPH (PSPH)
    :undoc-members:
    :member-order: bysource
 
+MAGMA2
+--------------
+
+.. automodule:: pysph.sph.gas_dynamics.magma2
+   :members: SummationDensityMPMStyle
+   :undoc-members:
+   :member-order: bysource
+
 Rigid body motion
 -----------------
 

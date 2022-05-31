@@ -3,7 +3,7 @@ References
 -----------
     .. [Rosswog2009] Rosswog, Stephan. "Astrophysical smooth particle
         hydrodynamics." New Astronomy Reviews 53, no. 4-6 (2009): 78-104.
-
+        https://doi.org/10.1016/j.newar.2009.08.007
 
     .. [Rosswog2015] Rosswog, Stephan. "Boosting the accuracy of SPH
         techniques: Newtonian and special-relativistic tests." Monthly
@@ -34,31 +34,18 @@ from pysph.sph.wc.linalg import (augmented_matrix, gj_solve, identity,
 GHOST_TAG = get_ghost_tag()
 
 
-class NSRSPHScheme(Scheme):
-    def __init__(self, fluids, solids, dim, gamma, hfact, beta=2.0, fkern=1.0,
-                 max_density_iterations=250, alphamax=1.0, alphamin=0.1,
-                 density_iteration_tolerance=1e-3, has_ghosts=False,
-                 eta_crit=0.3, eta_fold=0.2, eps=0.01,
-                 adaptive_h_scheme='magma2', ndes=300):
+class MAGMA2Scheme(Scheme):
+    def __init__(self, fluids, solids, dim, gamma, hfact,
+                 adaptive_h_scheme='magma2', max_density_iterations=250,
+                 density_iteration_tolerance=1e-3, alphamax=1.0, alphamin=0.1,
+                 alphac=0.05, beta=2.0, eps=0.01, eta_crit=0.3, eta_fold=0.2,
+                 fkern=1.0, ndes=300, has_ghosts=False):
         """
         Magma2 formulation of Rosswog.
 
-        Ref
         Set of Equations: [Rosswog2020b]_
+
         Dissipation Limiter: [Rosswog2020a]_
-
-        Notes
-        -----
-        Is this exactly in accordance with what is proposed in [Hopkins2015]_ ?
-            Not quite.
-
-        What is different then?
-            #. Adapting smoothing length using MPM [KP14]_ procedure from
-               :class:`SummationDensity
-               <pysph.sph.gas_dynamics.basic.SummationDensity>`. From this, the
-               grad-h terms removed.
-            #. Using :class:`CubicSpline <pysph.base.kernels.CubicSpline>`
-               as default kernel.
 
         Parameters
         ----------
@@ -74,26 +61,42 @@ class NSRSPHScheme(Scheme):
         hfact: float
             :math:`h_{fact}` for smoothing length adaptivity, also referred to
             as kernel_factor in other schemes like AKDE, MPM, GSPH.
+        adaptive_h_scheme: str, optional
+            Procedure to adapt smoothing lengths. One of ['gadget2', 'mpm'], by
+            default 'gadget2'.
+        max_density_iterations: int, optional
+            Maximum number of iterations to run for one density step if using
+            MPM procedure to adapt smoothing lengths, by default 2.0
+        density_iteration_tolerance: float, optional
+            Maximum difference allowed in two successive density iterations
+            if using MPM procedure to adapt smoothing lengths, by default 1e-3.
+        alphamax : float, optional
+            :math:`\\alpha_{max}` for artificial viscosity switch, by default
+            1.0
+        alphamin : float, optional
+            :math:`\\alpha_{0}` for artificial viscosity switch, by default
+            0.1
+        alphac : float, optional
+            :math:`\\alpha_{u}` for artificial conductivity, by default
+            0.05
         beta : float, optional
             :math:`\\beta` for artificial viscosity, by default 2.0
-        fkern : float, optional
-            :math:`f_{kern}`, Factor to scale smoothing length for equivalence
-            when using kernel with altered `radius_scale`, by default 1.
-        max_density_iterations : int, optional
-            Maximum number of iterations to run for one density step,
-            by default 250.
-        density_iteration_tolerance : float, optional
-            Maximum difference allowed in two successive density iterations,
-            by default 1e-3
-        has_ghosts : bool, optional
-            if ghost particles (either mirror or periodic) is used, by default
-            False
-        alphamax : float, optional
-            :math:`\\alpha_{av}` for artificial viscosity switch, by default
-            1.0
         eps : float, optional
             Numerical parameter often used in denominator to avoid division
             by zero, by default 0.01
+        eta_crit : float, optional
+            :math:`\\eta_{crit}` for slope limiter, by default 0.3
+        eta_fold : float, optional
+            :math:`\\eta_{fold}` for slope limiter, by default 0.2
+        fkern : float, optional
+            :math:`f_{kern}`, Factor to scale smoothing length for equivalence
+            when using kernel with altered `radius_scale`, by default 1.0.
+        ndes : int, optional
+             :math:`n_{des}`, Desired Number of neighbours to be in the kernel
+             support of each particle, by default 300 for 3D.
+        has_ghosts : bool, optional
+            if ghost particles (either mirror or periodic) is used, by default
+            False
         """
 
         self.fluids = fluids
@@ -137,9 +140,9 @@ class NSRSPHScheme(Scheme):
                            default=None, help="gamma for the state equation.")
 
         group.add_argument("--n-des", action="store", type=float, dest="ndes",
-                           default=None, help="Number of neighbours designated"
-                                              " to be in the kernel support of"
-                                              " each particle.")
+                           default=None, help="Desired Number of neighbours to"
+                                              " be in the kernel support of "
+                                              "each particle.")
 
     def consume_user_options(self, options):
         vars = ['gamma', 'alphamax', 'beta', 'adaptive_h_scheme', 'ndes']
@@ -353,9 +356,7 @@ class SummationDensityMPMStyle(Equation):
         """
         :class:`SummationDensity
         <pysph.sph.gas_dynamics.basic.SummationDensity>` modified to use
-         number density and without grad-h terms.
-
-        Ref. Appendix F1 [Hopkins2015]_
+        number density and without grad-h terms.
         """
 
         self.density_iterations = density_iterations
@@ -401,7 +402,8 @@ class SummationDensityMPMStyle(Equation):
         d_n[d_idx] += WI
         d_dndh[d_idx] += GHI
 
-    def post_loop(self, d_idx, d_h0, d_h, d_ah, d_converged, d_n, d_dndh, d_an):
+    def post_loop(self, d_idx, d_h0, d_h, d_ah, d_converged, d_n, d_dndh,
+                  d_an):
         # iteratively find smoothing length
         if self.density_iterations:
             if not (d_converged[d_idx] == 1):
@@ -983,7 +985,8 @@ class MomentumAndEnergyMI1(Equation):
                         (gmi[1] + gmj[1]) * (gmi[1] + gmj[1]) +
                         (gmi[2] + gmj[2]) * (gmi[2] + gmj[2]))
 
-        d_ae[d_idx] -= 0.5 * self.alphac * mj * vsigng * eij * normgmij * RHOIJ1
+        d_ae[
+            d_idx] -= 0.5 * self.alphac * mj * vsigng * eij * normgmij * RHOIJ1
         d_ae[d_idx] += mj * pibyrhoisq * vijdotdwi
 
 
@@ -1016,7 +1019,6 @@ class WallBoundary(Equation):
         d_n[d_idx] = 0.0
         d_dndh[d_idx] = 0.0
 
-
     def loop(self, d_idx, s_idx, d_p, d_rho, d_e, d_m, d_cs, d_divv, d_h, d_u,
              d_v, d_w, d_wij, d_htmp, s_p, s_rho, s_e, s_m, s_cs, s_h, s_divv,
              s_u, s_v, s_w, WI, s_n, d_n, s_dndh, d_dndh):
@@ -1033,7 +1035,6 @@ class WallBoundary(Equation):
         d_htmp[d_idx] += s_h[s_idx] * WI
         d_n[d_idx] += s_n[s_idx] * WI
         d_dndh[d_idx] += s_dndh[s_idx] * WI
-
 
     def post_loop(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_divv, d_h, d_u,
                   d_v, d_w, d_wij, d_htmp, d_n, d_dndh, d_m0):
