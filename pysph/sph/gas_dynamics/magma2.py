@@ -152,9 +152,13 @@ class MAGMA2Scheme(Scheme):
     def configure_solver(self, kernel=None, integrator_cls=None,
                          extra_steppers=None, **kw):
 
-        from pysph.base.kernels import Gaussian
         if kernel is None:
-            kernel = Gaussian(dim=self.dim)
+            if self.dim == 1:
+                from pysph.base.kernels import WendlandQuinticC6_1D
+                kernel = WendlandQuinticC6_1D(dim=self.dim)
+            else:
+                from pysph.base.kernels import WendlandQuinticC6
+                kernel = WendlandQuinticC6(dim=self.dim)
 
         if hasattr(kernel, 'fkern'):
             self.fkern = kernel.fkern
