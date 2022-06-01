@@ -33,6 +33,14 @@ GHOST_TAG = get_ghost_tag()
 
 
 class MAGMA2Scheme(Scheme):
+    """
+    Magma2 formulation of Rosswog.
+
+    Set of Equations: [Rosswog2020b]_
+
+    Dissipation Limiter: [Rosswog2020a]_
+    """
+
     def __init__(self, fluids, solids, dim, gamma, hfact,
                  adaptive_h_scheme='magma2', max_density_iterations=250,
                  density_iteration_tolerance=1e-3, alphamax=1.0, alphamin=0.1,
@@ -40,12 +48,6 @@ class MAGMA2Scheme(Scheme):
                  fkern=1.0, ndes=300, recycle_accelerations=True,
                  has_ghosts=False):
         """
-        Magma2 formulation of Rosswog.
-
-        Set of Equations: [Rosswog2020b]_
-
-        Dissipation Limiter: [Rosswog2020a]_
-
         Parameters
         ----------
         fluids: list
@@ -846,7 +848,7 @@ class MomentumAndEnergyMI1(Equation):
         d_aw[d_idx] = 0.0
         d_ae[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx,s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
+    def loop(self, d_idx, s_idx, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
              d_au, d_av, d_aw, d_ae, XIJ, VIJ, d_alpha, s_alpha, d_ddv, s_ddv,
              RHOIJ1, d_h, s_h, d_cm, s_cm, WI, WJ, d_dv, s_dv, d_de, s_de,
              d_dde, s_dde, d_e, s_e, RHOIJ):
@@ -960,7 +962,7 @@ class MomentumAndEnergyMI1(Equation):
                         gmij[2] * gmij[2])
 
         d_ae[d_idx] -= self.alphac * mj * vsigng * eij * normgmij * RHOIJ1
-        d_ae[d_idx] += mj * pibyrhoisq * vijdotdwi
+        d_ae[d_idx] += mj * pibyrhoisq * vijdotdwi  # artificial conduction
 
 
 class WallBoundary(Equation):
