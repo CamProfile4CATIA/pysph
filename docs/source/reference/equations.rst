@@ -100,7 +100,7 @@ MAGMA2
 --------------
 
 .. automodule:: pysph.sph.gas_dynamics.magma2
-   :members: SummationDensityMPMStyle
+   :members: SummationDensityMPMStyle, MomentumAndEnergyMI1
    :undoc-members:
    :member-order: bysource
 

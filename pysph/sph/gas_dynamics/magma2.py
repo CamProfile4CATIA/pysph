@@ -10,11 +10,9 @@ References
         Notices of the Royal Astronomical Society 448, no. 4 (2015):
         3628-3664. https://doi.org/10.1093/mnras/stv225.
 
-
     .. [Rosswog2020a] Rosswog, Stephan. "A simple, entropy-based dissipation
         trigger for SPH." The Astrophysical Journal 898, no. 1 (2020): 60.
         https://doi.org/10.3847/1538-4357/ab9a2e.
-
 
     .. [Rosswog2020b] Rosswog, Stephan. "The Lagrangian hydrodynamics code
         MAGMA2." Monthly Notices of the Royal Astronomical Society 498, no. 3
@@ -35,20 +33,20 @@ GHOST_TAG = get_ghost_tag()
 
 
 class MAGMA2Scheme(Scheme):
+    """Magma2 formulation of Rosswog.
+
+    Set of Equations: [Rosswog2020b]_
+
+    Dissipation Limiter: [Rosswog2020a]_
+    """
+
     def __init__(self, fluids, solids, dim, gamma, hfact,
                  adaptive_h_scheme='magma2', max_density_iterations=250,
                  density_iteration_tolerance=1e-3, alphamax=1.0, alphamin=0.1,
                  alphac=0.05, beta=2.0, eps=0.01, eta_crit=0.3, eta_fold=0.2,
                  fkern=1.0, ndes=300, recycle_accelerations=True,
                  has_ghosts=False):
-        """
-        Magma2 formulation of Rosswog.
-
-        Set of Equations: [Rosswog2020b]_
-
-        Dissipation Limiter: [Rosswog2020a]_
-
-        Parameters
+        """Parameters
         ----------
         fluids: list
             List of names of fluid particle arrays.
@@ -821,56 +819,23 @@ class EvaluateTildeMu(Equation):
 
 
 class MomentumAndEnergyMI1(Equation):
-    def _get_helpers_(self):
-        return [mat_vec_mult, dot]
+    """Matrix inversion formulation 1 (MI1) momentum and energy equations with
+    artificial viscosity and artificial conductivity from [Rosswog2020b]_
+    """
 
     def __init__(self, dest, sources, dim, fkern, eta_crit=0.3, eta_fold=0.2,
                  beta=2.0, alphac=0.05, eps=0.01):
-        r"""
-        Momentum and Energy Equations with artificial viscosity.
-
-        Possible typo in that has been taken care of:
-
-        Instead of Equation F3 [Hopkins2015]_ for evolution of total
-        energy sans artificial viscosity and artificial conductivity,
-
-            .. math::
-                \frac{\mathrm{d} E_{i}}{\mathrm{~d} t}=\boldsymbol{v}_{i}
-                \cdot \frac{\mathrm{d} \boldsymbol{P}_{i}}{\mathrm{~d} t}-
-                \sum_{j} m_{i} m_{j}\left(\boldsymbol{v}_{i}-
-                \boldsymbol{v}_{j}\right) \cdot\left[\frac{P_{i}}
-                {\bar{\rho}_{i}^{2}} f_{i, j} \nabla_{i}
-                W_{i j}\left(h_{i}\right)\right],
-
-        it should have been,
-
-            .. math::
-                \frac{\mathrm{d} E_{i}}{\mathrm{~d} t}=\boldsymbol{v}_{i}
-                \cdot \frac{\mathrm{d} \boldsymbol{P}_{i}}{\mathrm{~d} t}+
-                \sum_{j} m_{i} m_{j}\left(\boldsymbol{v}_{i}-
-                \boldsymbol{v}_{j}\right) \cdot\left[\frac{P_{i}}
-                {\bar{\rho}_{i}^{2}} f_{i, j} \nabla_{i}
-                W_{i j}\left(h_{i}\right)\right].
-
-        Specific thermal energy, :math:`u`, would therefore be evolved
-        using,
-
-            .. math::
-                \frac{\mathrm{d} u_{i}}{\mathrm{~d} t}=
-                \sum_{j} m_{j}\left(\boldsymbol{v}_{i}-
-                \boldsymbol{v}_{j}\right) \cdot\left[\frac{P_{i}}
-                {\bar{\rho}_{i}^{2}} f_{i, j} \nabla_{i}
-                W_{i j}\left(h_{i}\right)\right]
-        """
         self.beta = beta
         self.dim = dim
         self.fkern = fkern
-        self.dimsq = dim * dim
         self.eta_crit = eta_crit
         self.eta_fold = eta_fold
         self.alphac = alphac
         self.eps = eps
         super().__init__(dest, sources)
+
+    def _get_helpers_(self):
+        return [mat_vec_mult, dot]
 
     def initialize(self, d_idx, d_au, d_av, d_aw, d_ae):
         d_au[d_idx] = 0.0
@@ -878,35 +843,38 @@ class MomentumAndEnergyMI1(Equation):
         d_aw[d_idx] = 0.0
         d_ae[d_idx] = 0.0
 
-        # d_dt_cfl[d_idx] = 0.0
+    def loop(self, d_idx, s_idx, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho, d_h,
+             d_au, d_av, d_aw, d_ae, XIJ, VIJ, d_alpha, s_alpha, d_de, s_de,
+             RHOIJ1, d_cm, s_cm, WI, WJ, d_dv, s_dv, d_ddv, s_ddv, d_e, s_e,
+             d_dde, s_dde, RHOIJ, s_h):
 
-    def loop(self, d_idx, s_idx, d_m, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
-             d_au, d_av, d_aw, d_ae, XIJ, VIJ, HIJ, d_alpha, s_alpha,
-             R2IJ, RHOIJ1, d_h, d_dndh, d_n, s_h, s_dndh, s_n,
-             d_cm, s_cm, WI, WJ, d_u, d_v, d_w, s_u, s_v,
-             s_w, d_dv, s_dv, d_ddv, s_ddv, d_de, s_de, d_dde, s_dde, d_e,
-             s_e, RHOIJ):
+        gmi, gmj, etai, etaj, vij, mpinc, gmij = declare('matrix(3)', 7)
+        dvdel, ddvdeldel = declare('matrix(3)', 2)
+        dsi2, ssi2, row, col, blk, blkrowcol, rowcol, dim = declare('int', 8)
 
-        epssq = self.eps * self.eps
-
+        dim = self.dim
+        eps = self.eps
         beta = self.beta
-
         hi = self.fkern * d_h[d_idx]
         hj = self.fkern * s_h[s_idx]
 
-        # averaged sound speed
-        cij = 0.5 * (d_cs[d_idx] + s_cs[s_idx])
+        rhoi = d_rho[d_idx]
+        csi = d_cs[d_idx]
+        alphai = d_alpha[d_idx]
+        ei = d_e[d_idx]
+        pi = d_p[d_idx]
 
-        scm, dcm, idmat = declare('matrix(9)', 3)
-        gmi, gmj, etai, etaj, vij, mpinc = declare('matrix(3)', 6)
-        dvdel, ddvdeldel = declare('matrix(3)', 2)
-        dsi2, ssi2, row, col, blk = declare('int', 5)
-        rowcol, drowcol, srowcol, dim, dimsq = declare('int', 5)
-        dim = self.dim
-        dimsq = self.dimsq
-        dsi2 = dimsq * d_idx
-        ssi2 = dimsq * s_idx
+        rhoj = s_rho[s_idx]
+        alphaj = s_alpha[s_idx]
+        csj = s_cs[s_idx]
+        ej = s_e[s_idx]
+        mj = s_m[s_idx]
+        pj = s_p[s_idx]
 
+        dsi2 = dim * dim * d_idx
+        ssi2 = dim * dim * s_idx
+
+        # Limiter
         for row in range(dim):
             gmi[row] = 0.0
             gmj[row] = 0.0
@@ -915,7 +883,6 @@ class MomentumAndEnergyMI1(Equation):
 
         etaisq = dot(etai, etai, dim)
         etajsq = dot(etaj, etaj, dim)
-
         etaij = sqrt(min(etaisq, etajsq))
 
         aanum = 0.0
@@ -928,13 +895,14 @@ class MomentumAndEnergyMI1(Equation):
                 aaden += s_dv[ssi2 + rowcol] * XIJ[row] * XIJ[col]
         aaij = aanum / aaden
 
-        phiijin = min(1.0, 4 * aaij / ((1 + aaij) * (1 + aaij)))
+        phiijin = min(1.0, 4.0 * aaij / ((1.0 + aaij) * (1.0 + aaij)))
         phiij = max(0.0, phiijin)
 
         if etaij < self.eta_crit:
             powin = (etaij - self.eta_crit) / self.eta_fold
             phiij = phiij * exp(-powin * powin)
 
+        # Reconstruction
         dedel = 0.0
         ddedel = 0.0
         for row in range(dim):
@@ -952,62 +920,41 @@ class MomentumAndEnergyMI1(Equation):
         for blk in range(dim):
             for row in range(dim):
                 for col in range(dim):
-                    rowcol = row * dim + col
-                    ddvdeldel[row] += \
-                        (
-                                d_ddv[dsi2 * dim + blk * dimsq + rowcol] -
-                                s_ddv[ssi2 * dim + blk * dimsq + rowcol]
-                        ) * mpinc[col] * mpinc[blk]
+                    blkrowcol = blk * dim + row * dim + col
+                    ddvdeldel[row] += (d_ddv[dsi2 * dim + blkrowcol] -
+                                       s_ddv[ssi2 * dim + blkrowcol]
+                                       ) * mpinc[col] * mpinc[blk]
 
-        vij[0] = VIJ[0] + phiij * (dvdel[0] + 0.5 * ddvdeldel[0])
-        vij[1] = VIJ[1] + phiij * (dvdel[1] + 0.5 * ddvdeldel[1])
-        vij[2] = VIJ[2] + phiij * (dvdel[2] + 0.5 * ddvdeldel[2])
-
-        eij = d_e[d_idx] - s_e[s_idx] + phiij * (dedel + 0.5 * ddedel)
-
-        pij = d_p[d_idx] - s_p[s_idx]
-        vsigng = sqrt(abs(pij) / RHOIJ)
-
-        mui = min(0.0, dot(vij, etai, dim) / (etaisq + epssq))
-        muj = min(0.0, dot(vij, etaj, dim) / (etajsq + epssq))
-
-        qi = d_rho[d_idx] * mui * (-d_alpha[d_idx] * d_cs[d_idx] +
-                                   beta * mui)
-        qj = s_rho[s_idx] * muj * (-s_alpha[s_idx] * s_cs[s_idx] +
-                                   beta * muj)
-
+        # Gradient functions and reconstructed differences
         for row in range(dim):
             for col in range(dim):
                 rowcol = row * dim + col
-                drowcol = dsi2 + rowcol
-                srowcol = ssi2 + rowcol
-                gmi[row] -= d_cm[drowcol] * XIJ[col] * WI
-                gmj[row] -= s_cm[srowcol] * XIJ[col] * WJ
+                gmi[row] -= d_cm[dsi2 + rowcol] * XIJ[col] * WI
+                gmj[row] -= s_cm[ssi2 + rowcol] * XIJ[col] * WJ
+            gmij[row] = 0.5 * (gmi[row] + gmj[row])
+            vij[row] = VIJ[row] + phiij * (dvdel[row] + 0.5 * ddvdeldel[row])
+        eij = ei - ej + phiij * (dedel + 0.5 * ddedel)
 
-        mj = s_m[s_idx]
+        # Artificial viscocity
+        vsigng = sqrt(abs(pi - pj) / RHOIJ)
+        mui = min(0.0, dot(vij, etai, dim) / (etaisq + eps * eps))
+        muj = min(0.0, dot(vij, etaj, dim) / (etajsq + eps * eps))
 
-        # p_i/rhoi**2
-        rhoisq = d_rho[d_idx] * d_rho[d_idx]
-        pibyrhoisq = (d_p[d_idx] + qi) / rhoisq
+        qi = rhoi * mui * (-alphai * csi + beta * mui)
+        qj = rhoj * muj * (-alphaj * csj + beta * muj)
 
-        # pj/rhoj**2
-        rhojsq = s_rho[s_idx] * s_rho[s_idx]
-        pjbyrhojsq = (s_p[s_idx] + qj) / rhojsq
-
-        # accelerations for velocity
+        # Accelerations for velocity
+        pibyrhoisq = (pi + qi) / (rhoi * rhoi)
+        pjbyrhojsq = (pj + qj) / (rhoj * rhoj)
         d_au[d_idx] -= mj * (pibyrhoisq * gmi[0] + pjbyrhojsq * gmj[0])
         d_av[d_idx] -= mj * (pibyrhoisq * gmi[1] + pjbyrhojsq * gmj[1])
         d_aw[d_idx] -= mj * (pibyrhoisq * gmi[2] + pjbyrhojsq * gmj[2])
 
-        # accelerations for the thermal energy
+        # Accelerations for the thermal energy
         vijdotdwi = dot(VIJ, gmi, dim)
-        normgmij = sqrt((gmi[0] + gmj[0]) * (gmi[0] + gmj[0]) +
-                        (gmi[1] + gmj[1]) * (gmi[1] + gmj[1]) +
-                        (gmi[2] + gmj[2]) * (gmi[2] + gmj[2]))
-
-        d_ae[
-            d_idx] -= 0.5 * self.alphac * mj * vsigng * eij * normgmij * RHOIJ1
-        d_ae[d_idx] += mj * pibyrhoisq * vijdotdwi
+        normgmij = sqrt(dot(gmij, gmij, dim))
+        d_ae[d_idx] -= self.alphac * mj * vsigng * eij * normgmij * RHOIJ1
+        d_ae[d_idx] += mj * pibyrhoisq * vijdotdwi  # artificial conductivity
 
 
 class WallBoundary(Equation):
@@ -1227,6 +1174,7 @@ class TVDRK2Integrator(Integrator):
         # Call any post-stage functions.
         self.do_post_stage(dt, 2)
 
+
 class TVDRK2IntegratorWithRecycling(Integrator):
     r"""
     The system is advanced using:
@@ -1255,6 +1203,7 @@ class TVDRK2IntegratorWithRecycling(Integrator):
 
         # Call any post-stage functions.
         self.do_post_stage(dt, 2)
+
 
 @annotate(fst='int', lst='int', key='doublep', arr='longp')
 def quicksort(arr, key, fst=0, lst=3):
