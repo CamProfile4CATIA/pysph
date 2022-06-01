@@ -821,47 +821,12 @@ class EvaluateTildeMu(Equation):
 
 
 class MomentumAndEnergyMI1(Equation):
-    def _get_helpers_(self):
-        return [mat_vec_mult, dot]
+    """Matrix inversion formulation 1 (MI1) momentum and energy equations with
+    artificial viscosity and artificial conductivity from [Rosswog2020b]_
+    """
 
     def __init__(self, dest, sources, dim, fkern, eta_crit=0.3, eta_fold=0.2,
                  beta=2.0, alphac=0.05, eps=0.01):
-        r"""
-        Momentum and Energy Equations with artificial viscosity.
-
-        Possible typo in that has been taken care of:
-
-        Instead of Equation F3 [Hopkins2015]_ for evolution of total
-        energy sans artificial viscosity and artificial conductivity,
-
-            .. math::
-                \frac{\mathrm{d} E_{i}}{\mathrm{~d} t}=\boldsymbol{v}_{i}
-                \cdot \frac{\mathrm{d} \boldsymbol{P}_{i}}{\mathrm{~d} t}-
-                \sum_{j} m_{i} m_{j}\left(\boldsymbol{v}_{i}-
-                \boldsymbol{v}_{j}\right) \cdot\left[\frac{P_{i}}
-                {\bar{\rho}_{i}^{2}} f_{i, j} \nabla_{i}
-                W_{i j}\left(h_{i}\right)\right],
-
-        it should have been,
-
-            .. math::
-                \frac{\mathrm{d} E_{i}}{\mathrm{~d} t}=\boldsymbol{v}_{i}
-                \cdot \frac{\mathrm{d} \boldsymbol{P}_{i}}{\mathrm{~d} t}+
-                \sum_{j} m_{i} m_{j}\left(\boldsymbol{v}_{i}-
-                \boldsymbol{v}_{j}\right) \cdot\left[\frac{P_{i}}
-                {\bar{\rho}_{i}^{2}} f_{i, j} \nabla_{i}
-                W_{i j}\left(h_{i}\right)\right].
-
-        Specific thermal energy, :math:`u`, would therefore be evolved
-        using,
-
-            .. math::
-                \frac{\mathrm{d} u_{i}}{\mathrm{~d} t}=
-                \sum_{j} m_{j}\left(\boldsymbol{v}_{i}-
-                \boldsymbol{v}_{j}\right) \cdot\left[\frac{P_{i}}
-                {\bar{\rho}_{i}^{2}} f_{i, j} \nabla_{i}
-                W_{i j}\left(h_{i}\right)\right]
-        """
         self.beta = beta
         self.dim = dim
         self.fkern = fkern
@@ -869,16 +834,17 @@ class MomentumAndEnergyMI1(Equation):
         self.eta_crit = eta_crit
         self.eta_fold = eta_fold
         self.alphac = alphac
-        self.eps = eps
+        self.epssq = eps * eps
         super().__init__(dest, sources)
+
+    def _get_helpers_(self):
+        return [mat_vec_mult, dot]
 
     def initialize(self, d_idx, d_au, d_av, d_aw, d_ae):
         d_au[d_idx] = 0.0
         d_av[d_idx] = 0.0
         d_aw[d_idx] = 0.0
         d_ae[d_idx] = 0.0
-
-        # d_dt_cfl[d_idx] = 0.0
 
     def loop(self, d_idx, s_idx, d_m, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
              d_au, d_av, d_aw, d_ae, XIJ, VIJ, HIJ, d_alpha, s_alpha,
@@ -887,21 +853,16 @@ class MomentumAndEnergyMI1(Equation):
              s_w, d_dv, s_dv, d_ddv, s_ddv, d_de, s_de, d_dde, s_dde, d_e,
              s_e, RHOIJ):
 
-        epssq = self.eps * self.eps
-
+        epssq = self.epssq
         beta = self.beta
 
         hi = self.fkern * d_h[d_idx]
         hj = self.fkern * s_h[s_idx]
 
-        # averaged sound speed
-        cij = 0.5 * (d_cs[d_idx] + s_cs[s_idx])
-
-        scm, dcm, idmat = declare('matrix(9)', 3)
         gmi, gmj, etai, etaj, vij, mpinc = declare('matrix(3)', 6)
         dvdel, ddvdeldel = declare('matrix(3)', 2)
         dsi2, ssi2, row, col, blk = declare('int', 5)
-        rowcol, drowcol, srowcol, dim, dimsq = declare('int', 5)
+        blkrowcol, rowcol, drowcol, srowcol, dim, dimsq = declare('int', 6)
         dim = self.dim
         dimsq = self.dimsq
         dsi2 = dimsq * d_idx
@@ -952,12 +913,10 @@ class MomentumAndEnergyMI1(Equation):
         for blk in range(dim):
             for row in range(dim):
                 for col in range(dim):
-                    rowcol = row * dim + col
-                    ddvdeldel[row] += \
-                        (
-                                d_ddv[dsi2 * dim + blk * dimsq + rowcol] -
-                                s_ddv[ssi2 * dim + blk * dimsq + rowcol]
-                        ) * mpinc[col] * mpinc[blk]
+                    blkrowcol = dimsq * blk + row * dim + col
+                    ddvdeldel[row] += (d_ddv[dsi2 * dim + blkrowcol] -
+                                       s_ddv[ssi2 * dim + blkrowcol]
+                                       ) * mpinc[col] * mpinc[blk]
 
         vij[0] = VIJ[0] + phiij * (dvdel[0] + 0.5 * ddvdeldel[0])
         vij[1] = VIJ[1] + phiij * (dvdel[1] + 0.5 * ddvdeldel[1])
@@ -1227,6 +1186,7 @@ class TVDRK2Integrator(Integrator):
         # Call any post-stage functions.
         self.do_post_stage(dt, 2)
 
+
 class TVDRK2IntegratorWithRecycling(Integrator):
     r"""
     The system is advanced using:
@@ -1255,6 +1215,7 @@ class TVDRK2IntegratorWithRecycling(Integrator):
 
         # Call any post-stage functions.
         self.do_post_stage(dt, 2)
+
 
 @annotate(fst='int', lst='int', key='doublep', arr='longp')
 def quicksort(arr, key, fst=0, lst=3):
