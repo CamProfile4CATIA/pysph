@@ -505,10 +505,6 @@ class SummationDensityMPMStyle(Equation):
 
 
 class CorrectionMatrix(Equation):
-    """
-    ‘Correction matrix’ C to account for the local particle distribution.
-    """
-
     def __init__(self, dest, sources, dim):
         self.dim = dim
         self.dimsq = dim * dim
@@ -538,10 +534,11 @@ class CorrectionMatrix(Equation):
     def post_loop(self, d_idx, d_dv, d_divv, d_cm):
         invcm, cm, idmat = declare('matrix(9)', 3)
         augcm = declare('matrix(18)')
-        dsi2, row, col, rowcol, dim = declare('int', 5)
+        dsi2, row, col, rowcol, dim, dimsq = declare('int', 6)
 
         dim = self.dim
-        dsi2 = self.dimsq * d_idx
+        dimsq = self.dimsq
+        dsi2 = dimsq * d_idx
         identity(invcm, dim)
         identity(idmat, dim)
 
@@ -1342,8 +1339,8 @@ class UpdateGhostProps(Equation):
 
     def initialize(self, d_idx, d_orig_idx, d_p, d_tag, d_h, d_rho, d_dndh,
                    d_n, d_cm, d_dv, d_dvaux, d_ddv, d_dde, d_de, d_deaux):
-        idx, dim, dimsq, row, col, rowcol = declare('int', 6)
-        blkrowcol, dsi2, si2, drowcol, srowcol = declare('int', 3)
+        idx, dim, dimsq, row, col, rowcol, blk = declare('int', 7)
+        blkrowcol, dsi2, si2, drowcol, srowcol = declare('int', 5)
         if d_tag[d_idx] == 2:
             idx = d_orig_idx[d_idx]
             d_p[d_idx] = d_p[idx]
@@ -1371,8 +1368,8 @@ class UpdateGhostProps(Equation):
                 for row in range(dim):
                     for col in range(dim):
                         blkrowcol = blk * dimsq + row * dim + col
-                        d_ddv[dim * dsi2 + blkrowcol] = d_ddv[
-                            dim * si2 + blkrowcol]
+                        d_ddv[dim * dsi2 + blkrowcol] = d_ddv[dim * si2 +
+                                                              blkrowcol]
 
 
 class TVDRK2Step(IntegratorStep):
