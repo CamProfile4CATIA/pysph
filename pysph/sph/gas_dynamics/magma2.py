@@ -62,9 +62,12 @@ class MAGMA2Scheme(Scheme):
         hfact: float
             :math:`h_{fact}` for smoothing length adaptivity, also referred to
             as kernel_factor in other schemes like AKDE, MPM, GSPH.
+        formulation: str, optional
+            Set of governing equations for momentum and energy. Should be one
+            of {'stdgrad', 'mi1', 'mi2'}, by default 'mi1'.
         adaptive_h_scheme: str, optional
-            Procedure to adapt smoothing lengths. One of ['gadget2', 'mpm'], by
-            default 'gadget2'.
+            Procedure to adapt smoothing lengths. Should be one of
+            {'gadget2', 'mpm'}, by default 'gadget2'.
         max_density_iterations: int, optional
             Maximum number of iterations to run for one density step if using
             MPM procedure to adapt smoothing lengths, by default 2.0
@@ -103,7 +106,8 @@ class MAGMA2Scheme(Scheme):
             If ghost particles (either mirror or periodic) is used, by default
             False
         """
-
+        self.h_scheme_choices = {'magma2', 'mpm'}
+        self.formulation_choices = {'mi1', 'mi2', 'stdgrad'}
         self.fluids = fluids
         self.solids = solids
         self.dim = dim
@@ -114,7 +118,6 @@ class MAGMA2Scheme(Scheme):
         self.density_iteration_tolerance = density_iteration_tolerance
         self.max_density_iterations = max_density_iterations
         self.has_ghosts = has_ghosts
-        self.adaptive_h_scheme = adaptive_h_scheme
         self.fkern = fkern
         self.alphamax = alphamax
         self.alphamin = alphamin
@@ -124,22 +127,26 @@ class MAGMA2Scheme(Scheme):
         self.eps = eps
         self.recycle_accelerations = recycle_accelerations
         self.ndes = ndes
+        self.adaptive_h_scheme = adaptive_h_scheme
         self.formulation = formulation
 
     def add_user_options(self, group):
-        h_scheme_choices = ['magma2', 'mpm']
+
         group.add_argument("--adaptive-h", action="store",
                            dest="adaptive_h_scheme",
                            default=None,
-                           choices=h_scheme_choices,
+                           choices=self.h_scheme_choices,
                            help="Specify scheme for adaptive smoothing "
-                                "lengths %s" % h_scheme_choices)
-        formulation_choices = ['mi1', 'mi2', 'stdgrad']
+                                "lengths: %s" % self.h_scheme_choices)
+
         group.add_argument("--formulation", action="store",
                            dest="formulation",
                            default=None,
-                           choices=formulation_choices,
-                           help="Specify formulation %s" % formulation_choices)
+                           choices=self.formulation_choices,
+                           help="Specify the set of governing equations for "
+                                "momentum and energy: "
+                                "%s" % self.formulation_choices)
+
         group.add_argument("--alpha-max", action="store", type=float,
                            dest="alphamax", default=None,
                            help="alpha_max for the artificial viscosity "
@@ -156,6 +163,7 @@ class MAGMA2Scheme(Scheme):
                            default=None, help="Desired Number of neighbours to"
                                               " be in the kernel support of "
                                               "each particle.")
+
         add_bool_argument(group, 'recycle-accelerations',
                           dest='recycle_accelerations', default=None,
                           help="Reuse accelerations used in the "
@@ -213,8 +221,6 @@ class MAGMA2Scheme(Scheme):
         all_pa = self.fluids + self.solids
         equations = []
 
-        # Find the optimal 'h'
-
         if self.adaptive_h_scheme == "magma2":
             print('Using MAGMA2 procedure to adapt smoothing lengths')
             g1p0 = []
@@ -260,6 +266,9 @@ class MAGMA2Scheme(Scheme):
                         AuxillaryGradient(dest=fluid, sources=all_pa,
                                           dim=self.dim))
                 equations.append(Group(equations=g2))
+            else:
+                raise ValueError("adaptive_h_scheme must be one of "
+                                 "%r." % self.h_scheme_choices)
 
         g3p1 = []
         for fluid in self.fluids:
@@ -269,10 +278,10 @@ class MAGMA2Scheme(Scheme):
 
         g3p2 = []
         for fluid in self.fluids:
-            g3p2.append(SecondGradient(dest=fluid, sources=all_pa,
-                                       dim=self.dim))
             g3p2.append(FirstGradient(dest=fluid, sources=all_pa,
                                       dim=self.dim))
+            g3p2.append(SecondGradient(dest=fluid, sources=all_pa,
+                                       dim=self.dim))
             g3p2.append(EntropyBasedDissipationTrigger(
                 dest=fluid, sources=None, alphamax=self.alphamax,
                 alphamin=self.alphamin, fkern=self.fkern, l0=log(1e-4),
@@ -319,7 +328,8 @@ class MAGMA2Scheme(Scheme):
                                                    alphac=self.alphac,
                                                    eps=self.eps))
             else:
-                raise SystemExit('Error: Invalid formulation specified.')
+                raise ValueError("formulation must be one of "
+                                 "%r." % self.formulation_choices)
             g5.append(EvaluateTildeMu(dest=fluid, sources=all_pa,
                                       dim=self.dim))
         equations.append(Group(equations=g5))
