@@ -846,27 +846,23 @@ class MomentumAndEnergyMI1(Equation):
         d_aw[d_idx] = 0.0
         d_ae[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, d_m, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
-             d_au, d_av, d_aw, d_ae, XIJ, VIJ, HIJ, d_alpha, s_alpha,
-             R2IJ, RHOIJ1, d_h, d_dndh, d_n, s_h, s_dndh, s_n,
-             d_cm, s_cm, WI, WJ, d_u, d_v, d_w, s_u, s_v,
-             s_w, d_dv, s_dv, d_ddv, s_ddv, d_de, s_de, d_dde, s_dde, d_e,
-             s_e, RHOIJ):
-
-        epssq = self.epssq
-        beta = self.beta
-
-        hi = self.fkern * d_h[d_idx]
-        hj = self.fkern * s_h[s_idx]
-
+    def loop(self, d_idx, s_idx,s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
+             d_au, d_av, d_aw, d_ae, XIJ, VIJ, d_alpha, s_alpha, d_ddv, s_ddv,
+             RHOIJ1, d_h, s_h, d_cm, s_cm, WI, WJ, d_dv, s_dv, d_de, s_de,
+             d_dde, s_dde, d_e, s_e, RHOIJ):
         gmi, gmj, etai, etaj, vij, mpinc = declare('matrix(3)', 6)
-        dvdel, ddvdeldel = declare('matrix(3)', 2)
+        dvdel, ddvdeldel, gmij = declare('matrix(3)', 3)
         dsi2, ssi2, row, col, blk = declare('int', 5)
-        blkrowcol, rowcol, drowcol, srowcol, dim, dimsq = declare('int', 6)
+        blkrowcol, rowcol, dim, dimsq = declare('int', 4)
+
         dim = self.dim
         dimsq = self.dimsq
         dsi2 = dimsq * d_idx
         ssi2 = dimsq * s_idx
+        epssq = self.epssq
+        beta = self.beta
+        hi = self.fkern * d_h[d_idx]
+        hj = self.fkern * s_h[s_idx]
 
         for row in range(dim):
             gmi[row] = 0.0
@@ -874,9 +870,9 @@ class MomentumAndEnergyMI1(Equation):
             etai[row] = XIJ[row] / hi
             etaj[row] = XIJ[row] / hj
 
+        # Limiter
         etaisq = dot(etai, etai, dim)
         etajsq = dot(etaj, etaj, dim)
-
         etaij = sqrt(min(etaisq, etajsq))
 
         aanum = 0.0
@@ -887,8 +883,8 @@ class MomentumAndEnergyMI1(Equation):
                 rowcol = row * dim + col
                 aanum += d_dv[dsi2 + rowcol] * XIJ[row] * XIJ[col]
                 aaden += s_dv[ssi2 + rowcol] * XIJ[row] * XIJ[col]
-        aaij = aanum / aaden
 
+        aaij = aanum / aaden
         phiijin = min(1.0, 4 * aaij / ((1 + aaij) * (1 + aaij)))
         phiij = max(0.0, phiijin)
 
@@ -896,15 +892,23 @@ class MomentumAndEnergyMI1(Equation):
             powin = (etaij - self.eta_crit) / self.eta_fold
             phiij = phiij * exp(-powin * powin)
 
+        # Reconstruction
         dedel = 0.0
         ddedel = 0.0
         for row in range(dim):
             ddvdeldel[row] = 0.0
             dvdel[row] = 0.0
+
+            # [(\partial_j v^i) \delta^j]_a -
+            # [(\partial_j v^i) \delta^j]_b
             dedel -= (d_de[d_idx * dim + row] +
                       s_de[s_idx * dim + row]) * mpinc[col]
+
             for col in range(dim):
                 rowcol = row * dim + col
+
+                # [(\partial_l \partial_m e) \delta^l \delta^m]_a -
+                # [(\partial_l \partial_m e) \delta^l \delta^m]_b
                 dvdel[row] -= (d_dv[dsi2 + rowcol] +
                                s_dv[ssi2 + rowcol]) * mpinc[col]
                 ddedel += (d_dde[dsi2 + rowcol] -
@@ -914,58 +918,48 @@ class MomentumAndEnergyMI1(Equation):
             for row in range(dim):
                 for col in range(dim):
                     blkrowcol = dimsq * blk + row * dim + col
+
+                    # [(\partial_l \partial_m v^i) \delta^l \delta^m]_a -
+                    # [(\partial_l \partial_m v^i) \delta^l \delta^m]_b
                     ddvdeldel[row] += (d_ddv[dsi2 * dim + blkrowcol] -
                                        s_ddv[ssi2 * dim + blkrowcol]
                                        ) * mpinc[col] * mpinc[blk]
 
-        vij[0] = VIJ[0] + phiij * (dvdel[0] + 0.5 * ddvdeldel[0])
-        vij[1] = VIJ[1] + phiij * (dvdel[1] + 0.5 * ddvdeldel[1])
-        vij[2] = VIJ[2] + phiij * (dvdel[2] + 0.5 * ddvdeldel[2])
-
+        # Gradient functions reconstructed differences
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * dim + col
+                gmi[row] -= d_cm[dsi2 + rowcol] * XIJ[col] * WI
+                gmj[row] -= s_cm[ssi2 + rowcol] * XIJ[col] * WJ
+            gmij[row] = 0.5 * (gmi[row] + gmj[row])
+            vij[row] = VIJ[row] + phiij * (dvdel[row] + 0.5 * ddvdeldel[row])
         eij = d_e[d_idx] - s_e[s_idx] + phiij * (dedel + 0.5 * ddedel)
 
-        pij = d_p[d_idx] - s_p[s_idx]
-        vsigng = sqrt(abs(pij) / RHOIJ)
-
+        # Artificial viscosity
+        vsigng = sqrt(abs(d_p[d_idx] - s_p[s_idx]) / RHOIJ)
         mui = min(0.0, dot(vij, etai, dim) / (etaisq + epssq))
         muj = min(0.0, dot(vij, etaj, dim) / (etajsq + epssq))
-
         qi = d_rho[d_idx] * mui * (-d_alpha[d_idx] * d_cs[d_idx] +
                                    beta * mui)
         qj = s_rho[s_idx] * muj * (-s_alpha[s_idx] * s_cs[s_idx] +
                                    beta * muj)
 
-        for row in range(dim):
-            for col in range(dim):
-                rowcol = row * dim + col
-                drowcol = dsi2 + rowcol
-                srowcol = ssi2 + rowcol
-                gmi[row] -= d_cm[drowcol] * XIJ[col] * WI
-                gmj[row] -= s_cm[srowcol] * XIJ[col] * WJ
-
+        # Accelerations for velocity
         mj = s_m[s_idx]
+        pibyrhoisq = (d_p[d_idx] + qi) / (d_rho[d_idx] * d_rho[d_idx])
+        pjbyrhojsq = (s_p[s_idx] + qj) / (s_rho[s_idx] * s_rho[s_idx])
 
-        # p_i/rhoi**2
-        rhoisq = d_rho[d_idx] * d_rho[d_idx]
-        pibyrhoisq = (d_p[d_idx] + qi) / rhoisq
-
-        # pj/rhoj**2
-        rhojsq = s_rho[s_idx] * s_rho[s_idx]
-        pjbyrhojsq = (s_p[s_idx] + qj) / rhojsq
-
-        # accelerations for velocity
         d_au[d_idx] -= mj * (pibyrhoisq * gmi[0] + pjbyrhojsq * gmj[0])
         d_av[d_idx] -= mj * (pibyrhoisq * gmi[1] + pjbyrhojsq * gmj[1])
         d_aw[d_idx] -= mj * (pibyrhoisq * gmi[2] + pjbyrhojsq * gmj[2])
 
-        # accelerations for the thermal energy
+        # Accelerations for the thermal energy
         vijdotdwi = dot(VIJ, gmi, dim)
-        normgmij = sqrt((gmi[0] + gmj[0]) * (gmi[0] + gmj[0]) +
-                        (gmi[1] + gmj[1]) * (gmi[1] + gmj[1]) +
-                        (gmi[2] + gmj[2]) * (gmi[2] + gmj[2]))
+        normgmij = sqrt(gmij[0] * gmij[0] +
+                        gmij[1] * gmij[1] +
+                        gmij[2] * gmij[2])
 
-        d_ae[
-            d_idx] -= 0.5 * self.alphac * mj * vsigng * eij * normgmij * RHOIJ1
+        d_ae[d_idx] -= self.alphac * mj * vsigng * eij * normgmij * RHOIJ1
         d_ae[d_idx] += mj * pibyrhoisq * vijdotdwi
 
 
