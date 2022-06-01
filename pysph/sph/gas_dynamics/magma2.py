@@ -874,7 +874,7 @@ class MomentumAndEnergyMI1(Equation):
         dsi2 = dim * dim * d_idx
         ssi2 = dim * dim * s_idx
 
-        # Limiter
+        # For reconstruction, slope limiting and gradient functions
         for row in range(dim):
             gmi[row] = 0.0
             gmj[row] = 0.0
@@ -885,26 +885,10 @@ class MomentumAndEnergyMI1(Equation):
         etajsq = dot(etaj, etaj, dim)
         etaij = sqrt(min(etaisq, etajsq))
 
-        aanum = 0.0
-        aaden = 0.0
-        for row in range(dim):
-            mpinc[row] = 0.5 * XIJ[row]
-            for col in range(dim):
-                rowcol = row * dim + col
-                aanum += d_dv[dsi2 + rowcol] * XIJ[row] * XIJ[col]
-                aaden += s_dv[ssi2 + rowcol] * XIJ[row] * XIJ[col]
-        aaij = aanum / aaden
-
-        phiijin = min(1.0, 4.0 * aaij / ((1.0 + aaij) * (1.0 + aaij)))
-        phiij = max(0.0, phiijin)
-
-        if etaij < self.eta_crit:
-            powin = (etaij - self.eta_crit) / self.eta_fold
-            phiij = phiij * exp(-powin * powin)
-
-        # Reconstruction
         dedel = 0.0
         ddedel = 0.0
+        aanum = 0.0
+        aaden = 0.0
         for row in range(dim):
             ddvdeldel[row] = 0.0
             dvdel[row] = 0.0
@@ -912,26 +896,49 @@ class MomentumAndEnergyMI1(Equation):
                       s_de[s_idx * dim + row]) * mpinc[col]
             for col in range(dim):
                 rowcol = row * dim + col
+
+                # [(\partial_j v^i) \delta^j]_a -
+                # [(\partial_j v^i) \delta^j]_b
                 dvdel[row] -= (d_dv[dsi2 + rowcol] +
                                s_dv[ssi2 + rowcol]) * mpinc[col]
+
+                # [(\partial_l \partial_m e) \delta^l \delta^m]_a -
+                # [(\partial_l \partial_m e) \delta^l \delta^m]_b
                 ddedel += (d_dde[dsi2 + rowcol] -
                            s_dde[ssi2 + rowcol]) * mpinc[row] * mpinc[col]
+
+                # Gradient functions
+                gmi[row] -= d_cm[dsi2 + rowcol] * XIJ[col] * WI
+                gmj[row] -= s_cm[ssi2 + rowcol] * XIJ[col] * WJ
+
+                # For A_{ab} in limiter
+                aanum += d_dv[dsi2 + rowcol] * XIJ[row] * XIJ[col]
+                aaden += s_dv[ssi2 + rowcol] * XIJ[row] * XIJ[col]
+
+            gmij[row] = 0.5 * (gmi[row] + gmj[row])
 
         for blk in range(dim):
             for row in range(dim):
                 for col in range(dim):
                     blkrowcol = blk * dim + row * dim + col
+
+                    # [(\partial_l \partial_m v^i) \delta^l \delta^m]_a -
+                    # [(\partial_l \partial_m v^i) \delta^l \delta^m]_b
                     ddvdeldel[row] += (d_ddv[dsi2 * dim + blkrowcol] -
                                        s_ddv[ssi2 * dim + blkrowcol]
                                        ) * mpinc[col] * mpinc[blk]
 
-        # Gradient functions and reconstructed differences
+        # Limiter
+        aaij = aanum / aaden  # A_{ab}
+        phiijin = min(1.0, 4.0 * aaij / ((1.0 + aaij) * (1.0 + aaij)))
+        phiij = max(0.0, phiijin)
+
+        if etaij < self.eta_crit:
+            powin = (etaij - self.eta_crit) / self.eta_fold
+            phiij = phiij * exp(-powin * powin)
+
+        # Reconstructed differences
         for row in range(dim):
-            for col in range(dim):
-                rowcol = row * dim + col
-                gmi[row] -= d_cm[dsi2 + rowcol] * XIJ[col] * WI
-                gmj[row] -= s_cm[ssi2 + rowcol] * XIJ[col] * WJ
-            gmij[row] = 0.5 * (gmi[row] + gmj[row])
             vij[row] = VIJ[row] + phiij * (dvdel[row] + 0.5 * ddvdeldel[row])
         eij = ei - ej + phiij * (dedel + 0.5 * ddedel)
 
