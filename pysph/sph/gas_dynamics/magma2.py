@@ -10,11 +10,9 @@ References
         Notices of the Royal Astronomical Society 448, no. 4 (2015):
         3628-3664. https://doi.org/10.1093/mnras/stv225.
 
-
     .. [Rosswog2020a] Rosswog, Stephan. "A simple, entropy-based dissipation
         trigger for SPH." The Astrophysical Journal 898, no. 1 (2020): 60.
         https://doi.org/10.3847/1538-4357/ab9a2e.
-
 
     .. [Rosswog2020b] Rosswog, Stephan. "The Lagrangian hydrodynamics code
         MAGMA2." Monthly Notices of the Royal Astronomical Society 498, no. 3
@@ -86,7 +84,7 @@ class MAGMA2Scheme(Scheme):
             Numerical parameter often used in denominator to avoid division
             by zero, by default 0.01
         eta_crit : float, optional
-            :math:`\\eta_{crit}` for slope limiter, by default 0.3
+            :math:`\\eta_{crit}` for slope limiter, by default None
         eta_fold : float, optional
             :math:`\\eta_{fold}` for slope limiter, by default 0.2
         fkern : float, optional
@@ -118,6 +116,7 @@ class MAGMA2Scheme(Scheme):
         self.fkern = fkern
         self.alphamax = alphamax
         self.alphamin = alphamin
+        self.alphac = alphac
         self.eta_crit = eta_crit
         self.eta_fold = eta_fold
         self.eps = eps
@@ -291,6 +290,7 @@ class MAGMA2Scheme(Scheme):
                                            fkern=self.fkern,
                                            eta_crit=self.eta_crit,
                                            eta_fold=self.eta_fold,
+                                           alphac=self.alphac,
                                            eps=self.eps))
             g5.append(EvaluateTildeMu(dest=fluid, sources=all_pa,
                                       dim=self.dim))
