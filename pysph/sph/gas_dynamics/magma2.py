@@ -19,9 +19,11 @@ References
         (2020): 4230-4255. https://doi.org/10.1093/mnras/staa2591.
 
 """
+import math
+
 from compyle.types import declare, annotate
 from pysph.base.particle_array import get_ghost_tag
-from math import *
+
 from pysph.sph.equation import Equation
 from pysph.sph.integrator import Integrator
 from pysph.sph.integrator_step import IntegratorStep
@@ -131,18 +133,14 @@ class MAGMA2Scheme(Scheme):
         self.formulation = formulation
 
     def add_user_options(self, group):
-
         group.add_argument("--adaptive-h", action="store",
-                           dest="adaptive_h_scheme",
-                           default=None,
+                           dest="adaptive_h_scheme", default=None,
                            choices=self.h_scheme_choices,
                            help="Specify scheme for adaptive smoothing "
                                 "lengths: %s" % self.h_scheme_choices)
 
-        group.add_argument("--formulation", action="store",
-                           dest="formulation",
-                           default=None,
-                           choices=self.formulation_choices,
+        group.add_argument("--formulation", action="store", dest="formulation",
+                           default=None, choices=self.formulation_choices,
                            help="Specify the set of governing equations for "
                                 "momentum and energy: "
                                 "%s" % self.formulation_choices)
@@ -166,9 +164,8 @@ class MAGMA2Scheme(Scheme):
 
         add_bool_argument(group, 'recycle-accelerations',
                           dest='recycle_accelerations', default=None,
-                          help="Reuse accelerations used in the "
-                               "correction step in the successive "
-                               "prediction step.")
+                          help="Reuse accelerations used in the correction "
+                               "step in the successive prediction step.")
 
     def consume_user_options(self, options):
         vars = ['gamma', 'alphamax', 'beta', 'adaptive_h_scheme', 'ndes',
@@ -178,7 +175,6 @@ class MAGMA2Scheme(Scheme):
 
     def configure_solver(self, kernel=None, integrator_cls=None,
                          extra_steppers=None, **kw):
-
         if kernel is None:
             if self.dim == 1:
                 from pysph.base.kernels import WendlandQuinticC6_1D
@@ -219,10 +215,9 @@ class MAGMA2Scheme(Scheme):
         from pysph.sph.equation import Group
 
         all_pa = self.fluids + self.solids
-        equations = []
 
+        equations = []
         if self.adaptive_h_scheme == "magma2":
-            print('Using MAGMA2 procedure to adapt smoothing lengths')
             g1p0 = []
             for fluid in self.fluids:
                 g1p0.append(IncreaseSmoothingLength(dest=fluid, sources=None))
@@ -234,9 +229,8 @@ class MAGMA2Scheme(Scheme):
                                                   ndes=self.ndes))
             equations.append(Group(equations=g1p1))
 
-            from pysph.sph.basic_equations import SummationDensity
-
             g2 = []
+            from pysph.sph.basic_equations import SummationDensity
             for fluid in self.fluids:
                 g2.append(SummationDensity(dest=fluid, sources=all_pa))
                 g2.append(IdealGasEOS(dest=fluid, sources=None,
@@ -246,34 +240,32 @@ class MAGMA2Scheme(Scheme):
             equations.append(Group(equations=g2))
 
         elif self.adaptive_h_scheme == "mpm":
-            print('Using MPM procedure to adapt smoothing lengths')
             g1 = []
             for fluid in self.fluids:
                 g1.append(SummationDensityMPMStyle(
                     dest=fluid, sources=all_pa, hfact=self.hfact,
                     density_iterations=True, dim=self.dim,
                     htol=self.density_iteration_tolerance))
-                equations.append(Group(
-                    equations=g1, update_nnps=True, iterate=True,
-                    max_iterations=self.max_density_iterations))
+                equations.append(
+                    Group(equations=g1, update_nnps=True, iterate=True,
+                          max_iterations=self.max_density_iterations))
 
                 g2 = []
                 for fluid in self.fluids:
-                    g2.append(
-                        IdealGasEOS(dest=fluid, sources=None,
-                                    gamma=self.gamma))
-                    g2.append(
-                        AuxillaryGradient(dest=fluid, sources=all_pa,
-                                          dim=self.dim))
+                    g2.append(IdealGasEOS(dest=fluid, sources=None,
+                                          gamma=self.gamma))
+                    g2.append(AuxillaryGradient(dest=fluid, sources=all_pa,
+                                                dim=self.dim))
                 equations.append(Group(equations=g2))
+
             else:
                 raise ValueError("adaptive_h_scheme must be one of "
                                  "%r." % self.h_scheme_choices)
 
         g3p1 = []
         for fluid in self.fluids:
-            g3p1.append(CorrectionMatrix(dest=fluid, sources=all_pa,
-                                         dim=self.dim))
+            g3p1.append(
+                CorrectionMatrix(dest=fluid, sources=all_pa, dim=self.dim))
         equations.append(Group(equations=g3p1))
 
         g3p2 = []
@@ -282,10 +274,14 @@ class MAGMA2Scheme(Scheme):
                                       dim=self.dim))
             g3p2.append(SecondGradient(dest=fluid, sources=all_pa,
                                        dim=self.dim))
-            g3p2.append(EntropyBasedDissipationTrigger(
-                dest=fluid, sources=None, alphamax=self.alphamax,
-                alphamin=self.alphamin, fkern=self.fkern, l0=log(1e-4),
-                l1=log(5e-2), gamma=self.gamma))
+            g3p2.append(EntropyBasedDissipationTrigger(dest=fluid,
+                                                       sources=None,
+                                                       alphamax=self.alphamax,
+                                                       alphamin=self.alphamin,
+                                                       fkern=self.fkern,
+                                                       l0=math.log(1e-4),
+                                                       l1=math.log(5e-2),
+                                                       gamma=self.gamma))
         equations.append(Group(equations=g3p2))
 
         g4 = []
@@ -330,8 +326,8 @@ class MAGMA2Scheme(Scheme):
             else:
                 raise ValueError("formulation must be one of "
                                  "%r." % self.formulation_choices)
-            g5.append(EvaluateTildeMu(dest=fluid, sources=all_pa,
-                                      dim=self.dim))
+            g5.append(
+                EvaluateTildeMu(dest=fluid, sources=all_pa, dim=self.dim))
         equations.append(Group(equations=g5))
 
         return equations
@@ -344,9 +340,8 @@ class MAGMA2Scheme(Scheme):
                  'au', 'av', 'aw', 'ae', 'pid', 'gid', 'tag', 'dwdh', 'h0',
                  'converged', 'ah', 'arho', 'dt_cfl', 'e0', 'rho0', 'u0', 'v0',
                  'w0', 'x0', 'y0', 'z0']
-        more_props = ['n', 'dndh', 'prevn', 'prevdndh',
-                      'divv', 'an', 'n0', 'alpha0',
-                      'aalpha', 'tilmu', 'dt_adapt']
+        more_props = ['n', 'dndh', 'prevn', 'prevdndh', 'divv', 'an', 'n0',
+                      'alpha0', 'aalpha', 'tilmu', 'dt_adapt']
         props.extend(more_props)
         output_props = 'rho p u v w x y z e n divv h alpha'.split(' ')
         for fluid in self.fluids:
@@ -389,8 +384,8 @@ class UpdateSmoothingLength(Equation):
     def _get_helpers_(self):
         return [quicksort]
 
-    def loop_all(self, d_idx, d_x, d_y, d_z, d_rho, d_h,
-                 s_m, s_x, s_y, s_z, s_h, NBRS, N_NBRS, SPH_KERNEL):
+    def loop_all(self, d_idx, d_x, d_y, d_z, d_h, s_x, s_y, s_z, NBRS, N_NBRS,
+                 SPH_KERNEL):
         i, ndes = declare('int', 2)
         ndes = self.ndes
         s_idx = declare('long')
@@ -399,6 +394,7 @@ class UpdateSmoothingLength(Equation):
         nidx = declare('matrix(500, "long")')
         for i in range(N_NBRS):
             s_idx = NBRS[i]
+
             xij[0] = d_x[d_idx] - s_x[s_idx]
             xij[1] = d_y[d_idx] - s_y[s_idx]
             xij[2] = d_z[d_idx] - s_z[s_idx]
@@ -426,8 +422,8 @@ class SummationDensityMPMStyle(Equation):
 
         super().__init__(dest, sources)
 
-    def initialize(self, d_idx, d_rho, d_arho, d_n, d_dndh,
-                   d_prevn, d_prevdndh, d_an):
+    def initialize(self, d_idx, d_rho, d_arho, d_n, d_dndh, d_prevn,
+                   d_prevdndh, d_an):
 
         d_rho[d_idx] = 0.0
         d_arho[d_idx] = 0.0
@@ -444,8 +440,8 @@ class SummationDensityMPMStyle(Equation):
         # to False. The Group can therefore iterate till convergence.
         self.equation_has_converged = 1
 
-    def loop(self, d_idx, s_idx, d_rho, d_arho, s_m, VIJ, WI, DWI,
-             GHI, d_n, d_dndh, d_h, d_prevn, d_prevdndh, d_an):
+    def loop(self, d_idx, s_idx, d_rho, d_arho, s_m, VIJ, WI, DWI, GHI, d_n,
+             d_dndh, d_an):
 
         mj = s_m[s_idx]
         vijdotdwij = VIJ[0] * DWI[0] + VIJ[1] * DWI[1] + VIJ[2] * DWI[2]
@@ -508,15 +504,71 @@ class SummationDensityMPMStyle(Equation):
         return self.equation_has_converged
 
 
+class CorrectionMatrix(Equation):
+    """
+    ‘Correction matrix’ C to account for the local particle distribution.
+    """
+
+    def __init__(self, dest, sources, dim):
+        self.dim = dim
+        self.dimsq = dim * dim
+        super().__init__(dest, sources)
+
+    def _get_helpers_(self):
+        return [identity, augmented_matrix, gj_solve]
+
+    def initialize(self, d_cm, d_idx):
+        dsi, i, dimsq = declare('int', 3)
+        dimsq = self.dimsq
+        dsi = dimsq * d_idx
+        for i in range(dimsq):
+            d_cm[dsi + i] = 0.0
+
+    def loop(self, d_idx, s_m, s_idx, XIJ, s_rho, d_cm, WI):
+        dsi2, row, col, drowcol, dim, dimsq = declare('int', 6)
+        dim = self.dim
+        dimsq = self.dimsq
+        dsi2 = d_idx * dimsq
+        mbbyrhob = s_m[s_idx] / s_rho[s_idx]
+        for row in range(dim):
+            for col in range(dim):
+                drowcol = dsi2 + row * dim + col
+                d_cm[drowcol] += mbbyrhob * XIJ[row] * XIJ[col] * WI
+
+    def post_loop(self, d_idx, d_dv, d_divv, d_cm):
+        invcm, cm, idmat = declare('matrix(9)', 3)
+        augcm = declare('matrix(18)')
+        dsi2, row, col, rowcol, dim = declare('int', 5)
+
+        dim = self.dim
+        dsi2 = self.dimsq * d_idx
+        identity(invcm, dim)
+        identity(idmat, dim)
+
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * dim + col
+                invcm[rowcol] = d_cm[dsi2 + rowcol]
+
+        augmented_matrix(invcm, idmat, dim, dim, dim, augcm)
+        gj_solve(augcm, dim, dim, cm)
+
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * dim + col
+                d_cm[dsi2 + rowcol] = cm[rowcol]
+
+
 class IdealGasEOS(Equation):
+    """
+    :class:`IdealGasEOS
+    <pysph.sph.gas_dynamics.basic.IdealGasEOS>` modified to avoid repeated
+    calculations using :meth:`loop() <pysph.sph.equation.Equation.loop()>`.
+    Doing the same using :meth:`post_loop()
+    <pysph.sph.equation.Equation.loop()>`.
+    """
+
     def __init__(self, dest, sources, gamma):
-        """
-        :class:`IdealGasEOS
-        <pysph.sph.gas_dynamics.basic.IdealGasEOS>` modified to avoid repeated
-        calculations using :meth:`loop() <pysph.sph.equation.Equation.loop()>`.
-        Doing the same using :meth:`post_loop()
-        <pysph.sph.equation.Equation.loop()>`.
-        """
         self.gamma = gamma
         self.gamma1 = gamma - 1.0
         super(IdealGasEOS, self).__init__(dest, sources)
@@ -527,10 +579,12 @@ class IdealGasEOS(Equation):
 
 
 class AuxillaryGradient(Equation):
+    """
+    Auxiliary first gradient calculated using analytical gradient of kernel
+    and without using density.
+    """
+
     def __init__(self, dest, sources, dim):
-        """
-        First Order consistent velocity gradient and divergence
-        """
         self.dim = dim
         self.dimsq = dim * dim
         super().__init__(dest, sources)
@@ -550,12 +604,11 @@ class AuxillaryGradient(Equation):
             d_dvaux[dsi2 + i] = 0.0
             d_invdm[dsi2 + i] = 0.0
 
-    def loop(self, d_idx, VIJ, XIJ, d_invdm, DWI, d_dvaux,
-             s_m, s_idx, d_deaux, d_e, s_e):
+    def loop(self, d_idx, VIJ, XIJ, d_invdm, DWI, d_dvaux, s_m, s_idx, d_deaux,
+             d_e, s_e):
         dsi2, row, col, drowcol, dim, dimsq = declare('int', 6)
         dim = self.dim
-        dimsq = self.dimsq
-        dsi2 = d_idx * dimsq
+        dsi2 = d_idx * self.dimsq
         eij = d_e[d_idx] - s_e[s_idx]
         for row in range(dim):
             d_deaux[d_idx * dim + row] += s_m[s_idx] * eij * DWI[row]
@@ -564,23 +617,21 @@ class AuxillaryGradient(Equation):
                 d_dvaux[drowcol] += s_m[s_idx] * VIJ[row] * DWI[col]
                 d_invdm[drowcol] += s_m[s_idx] * XIJ[row] * DWI[col]
 
-    def post_loop(self, d_idx, d_dv, d_divv, d_invdm, d_dvaux, d_deaux):
-        dsi2, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
+    def post_loop(self, d_idx, d_invdm, d_dvaux, d_deaux):
+        dsi2, row, col, rowcol, dim = declare('int', 5)
         invdm, idmat, dvaux, dvauxpre, dm = declare('matrix(9)', 5)
         auginvdm = declare('matrix(18)')
         deauxpre, deaux = declare('matrix(3)', 2)
 
         dim = self.dim
-        dimsq = dim * dim
-        dsi2 = dimsq * d_idx
+        dsi2 = self.dimsq * d_idx
 
         for row in range(dim):
             deauxpre[row] = d_deaux[dim * d_idx + row]
             for col in range(dim):
                 rowcol = row * dim + col
-                drowcol = dsi2 + rowcol
-                dvauxpre[rowcol] = d_dvaux[drowcol]
-                invdm[rowcol] = d_invdm[drowcol]
+                dvauxpre[rowcol] = d_dvaux[dsi2 + rowcol]
+                invdm[rowcol] = d_invdm[dsi2 + rowcol]
 
         identity(idmat, dim)
         augmented_matrix(invdm, idmat, dim, dim, dim, auginvdm)
@@ -592,15 +643,16 @@ class AuxillaryGradient(Equation):
             d_deaux[d_idx * dim + row] = deaux[row]
             for col in range(dim):
                 rowcol = row * dim + col
-                drowcol = dsi2 + rowcol
-                d_dvaux[drowcol] = dvaux[rowcol]
+                d_dvaux[dsi2 + rowcol] = dvaux[rowcol]
 
 
 class FirstGradient(Equation):
+    """
+    First gradient and divergence calculated using matrix inversion
+    formulation without analytical derivative of the kernel.
+    """
+
     def __init__(self, dest, sources, dim):
-        """
-        First Order consistent velocity gradient and divergence
-        """
         self.dim = dim
         self.dimsq = dim * dim
         super().__init__(dest, sources)
@@ -621,36 +673,32 @@ class FirstGradient(Equation):
             d_dv[dsi2 + i] = 0.0
         d_divv[d_idx] = 0.0
 
-    def loop(self, d_idx, VIJ, XIJ, d_dv, WI,
-             s_m, s_rho, s_idx, d_e, s_e, d_de):
-        dsi2, row, col, drowcol, dim, dimsq = declare('int', 6)
+    def loop(self, d_idx, VIJ, XIJ, d_dv, WI, s_m, s_rho, s_idx, d_e, s_e,
+             d_de):
+        dsi2, row, col, dim = declare('int', 4)
         dim = self.dim
-        dimsq = self.dimsq
-        dsi2 = d_idx * dimsq
+        dsi2 = d_idx * self.dimsq
         mbbyrhob = s_m[s_idx] / s_rho[s_idx]
         eij = d_e[d_idx] - s_e[s_idx]
         for row in range(dim):
             d_de[d_idx * dim + row] += mbbyrhob * eij * XIJ[row] * WI
             for col in range(dim):
-                drowcol = dsi2 + row * dim + col
-                d_dv[drowcol] += mbbyrhob * VIJ[row] * XIJ[col] * WI
+                d_dv[dsi2 + row * dim + col] += mbbyrhob * VIJ[row] * \
+                                                XIJ[col] * WI
 
     def post_loop(self, d_idx, d_dv, d_divv, d_cm, d_de):
         dv, dvpre, cm = declare('matrix(9)', 3)
-
-        dsi2, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
+        dsi2, row, col, rowcol, dim = declare('int', 5)
         depre, de = declare('matrix(3)', 2)
         dim = self.dim
-        dimsq = dim * dim
-        dsi2 = dimsq * d_idx
+        dsi2 = self.dimsq * d_idx
 
         for row in range(dim):
             depre[row] = d_de[dim * d_idx + row]
             for col in range(dim):
                 rowcol = row * dim + col
-                drowcol = dsi2 + rowcol
-                dvpre[rowcol] = d_dv[drowcol]
-                cm[rowcol] = d_cm[drowcol]
+                dvpre[rowcol] = d_dv[dsi2 + rowcol]
+                cm[rowcol] = d_cm[dsi2 + rowcol]
 
         mat_mult(cm, dvpre, dim, dv)
         mat_vec_mult(cm, depre, dim, de)
@@ -660,28 +708,30 @@ class FirstGradient(Equation):
             d_de[d_idx * dim + row] = de[row]
             for col in range(dim):
                 rowcol = row * dim + col
-                drowcol = dsi2 + rowcol
-                d_dv[drowcol] = dv[rowcol]
+                d_dv[dsi2 + rowcol] = dv[rowcol]
 
 
 class SecondGradient(Equation):
+    """
+    Second gradient calculated from auxiliary gradient using matrix inversion
+    formulation without analytical derivative of the kernel.
+    """
+
     def __init__(self, dest, sources, dim):
-        """
-        First Order consistent velocity gradient and divergence
-        """
         self.dim = dim
         self.dimsq = dim * dim
+        self.dimcu = self.dimsq * dim
         super().__init__(dest, sources)
 
     def _get_helpers_(self):
         return [mat_mult]
 
-    def initialize(self, d_ddv, d_idx, d_divv, d_dde):
+    def initialize(self, d_ddv, d_idx, d_dde):
         dsi3, i, dim, dimcu, blk, row, col = declare('int', 7)
         dsi2, dimsq = declare('int', 2)
         dim = self.dim
-        dimsq = dim * dim
-        dimcu = dim * dim * dim
+        dimsq = self.dimsq
+        dimcu = self.dimcu
         dsi2 = dimsq * d_idx
         dsi3 = dimcu * d_idx
         for i in range(dimcu):
@@ -689,35 +739,35 @@ class SecondGradient(Equation):
         for i in range(dimsq):
             d_dde[dsi2 + i] = 0.0
 
-    def loop(self, d_idx, VIJ, XIJ, d_dvaux, s_dvaux, WI, d_ddv,
-             s_m, s_rho, s_idx, d_e, s_deaux, d_deaux, d_dde, s_de):
-        dsi2, row, col, drowcol, dim, dimsq = declare('int', 6)
+    def loop(self, d_idx, XIJ, d_dvaux, s_dvaux, WI, d_ddv, s_m, s_rho,
+             s_idx, s_deaux, d_deaux, d_dde):
+        dsi2, row, col, dim, dimsq = declare('int', 5)
         blk, dblkrowcol, ssi2, srowcol, rowcol = declare('int', 5)
         dim = self.dim
         dimsq = self.dimsq
         dsi2 = d_idx * dimsq
         ssi2 = s_idx * dimsq
-        mbbyrhob = s_m[s_idx] / s_rho[s_idx]
 
+        mbbyrhob = s_m[s_idx] / s_rho[s_idx]
         for row in range(dim):
             deij = d_deaux[d_idx * dim + row] - s_deaux[s_idx * dim + row]
             for col in range(dim):
-                drowcol = dsi2 + row * dim + col
-                d_dde[drowcol] += mbbyrhob * deij * XIJ[col] * WI
+                d_dde[dsi2 + row * dim + col] += mbbyrhob * deij * XIJ[col] * \
+                                                 WI
 
         for blk in range(dim):
             for row in range(dim):
                 for col in range(dim):
                     dblkrowcol = dsi2 * dim + blk * dimsq + row * dim + col
-                    dvij = d_dvaux[dsi2 + blk * dim + row] - \
-                           s_dvaux[ssi2 + blk * dim + row]
+                    dvij = d_dvaux[dsi2 + blk * dim + row] - s_dvaux[
+                        ssi2 + blk * dim + row]
                     d_ddv[dblkrowcol] += mbbyrhob * dvij * XIJ[col] * WI
 
-    def post_loop(self, d_idx, d_dv, d_divv, d_cm, d_ddv, d_dde):
+    def post_loop(self, d_idx, d_cm, d_ddv, d_dde):
         ddvpre = declare('matrix(27)')
         ddvpreb, ddvblk, cm, ddepre, dde = declare('matrix(9)', 5)
         dsi2, row, col, rowcol, dim, dimsq = declare('int', 6)
-        blk, blkrowcol, dblkrowcol, dsi3, drowcol = declare('int', 5)
+        blk, blkrowcol, dsi3 = declare('int', 3)
         dim = self.dim
         dimsq = self.dimsq
         dsi2 = dimsq * d_idx
@@ -726,9 +776,8 @@ class SecondGradient(Equation):
         for row in range(dim):
             for col in range(dim):
                 rowcol = row * dim + col
-                drowcol = dsi2 + rowcol
-                ddepre[rowcol] = d_dde[drowcol]
-                cm[rowcol] = d_cm[drowcol]
+                ddepre[rowcol] = d_dde[dsi2 + rowcol]
+                cm[rowcol] = d_cm[dsi2 + rowcol]
 
         mat_mult(cm, ddepre, dim, dde)
 
@@ -740,23 +789,19 @@ class SecondGradient(Equation):
         for blk in range(dim):
             for row in range(dim):
                 for col in range(dim):
-                    rowcol = row * dim + col
-                    blkrowcol = blk * dimsq + rowcol
-                    dblkrowcol = dsi3 + blkrowcol
-                    ddvpre[blkrowcol] = d_ddv[dblkrowcol]
+                    blkrowcol = blk * dimsq + row * dim + col
+                    ddvpre[blkrowcol] = d_ddv[dsi3 + blkrowcol]
 
         for blk in range(dim):
             for row in range(dim):
                 for col in range(dim):
                     rowcol = row * dim + col
-                    blkrowcol = blk * dimsq + rowcol
-                    ddvpreb[rowcol] = ddvpre[blkrowcol]
+                    ddvpreb[rowcol] = ddvpre[blk * dimsq + rowcol]
             mat_mult(cm, ddvpreb, dim, ddvblk)
             for row in range(dim):
                 for col in range(dim):
                     rowcol = row * dim + col
-                    dblkrowcol = dsi3 + blk * dimsq + rowcol
-                    d_ddv[dblkrowcol] = ddvblk[rowcol]
+                    d_ddv[dsi3 + blk * dimsq + rowcol] = ddvblk[rowcol]
 
 
 class EntropyBasedDissipationTrigger(Equation):
@@ -770,10 +815,10 @@ class EntropyBasedDissipationTrigger(Equation):
         self.alphamin = alphamin
         super().__init__(dest, sources)
 
-    def post_loop(self, d_h, d_idx, d_cs, d_divv, d_dv, d_alpha, d_s,
-                  d_p, d_rho, dt, d_aalpha):
+    def post_loop(self, d_h, d_idx, d_cs, d_alpha, d_s, d_p, d_rho, dt,
+                  d_aalpha):
         snew = d_p[d_idx] / pow(d_rho[d_idx], self.gamma)
-        tau = d_h[d_idx] / d_cs[d_idx]
+        tau = self.fkern * d_h[d_idx] / d_cs[d_idx]
         epsdot = abs(d_s[d_idx] - snew) * tau / (d_s[d_idx] * dt)
         d_s[d_idx] = snew
         l = log(epsdot)
@@ -785,61 +830,6 @@ class EntropyBasedDissipationTrigger(Equation):
         else:
             d_alpha[d_idx] = alphades
             d_aalpha[d_idx] = 0.0
-
-
-class CorrectionMatrix(Equation):
-    def __init__(self, dest, sources, dim):
-        self.dim = dim
-        self.dimsq = dim * dim
-        super().__init__(dest, sources)
-
-    def _get_helpers_(self):
-        return [identity, augmented_matrix, gj_solve]
-
-    def initialize(self, d_cm, d_idx):
-        dsi, i, dimsq = declare('int', 3)
-        dimsq = self.dimsq
-        dsi = dimsq * d_idx
-        for i in range(dimsq):
-            d_cm[dsi + i] = 0.0
-
-    def loop(self, d_idx, s_m, s_idx, VIJ, DWI, XIJ, d_dv,
-             s_rho, d_cm, WI):
-        dsi2, row, col, drowcol, dim, dimsq = declare('int', 6)
-        dim = self.dim
-        dimsq = self.dimsq
-        dsi2 = d_idx * dimsq
-        mbbyrhob = s_m[s_idx] / s_rho[s_idx]
-        for row in range(dim):
-            for col in range(dim):
-                drowcol = dsi2 + row * dim + col
-                d_cm[drowcol] += mbbyrhob * XIJ[row] * XIJ[col] * WI
-
-    def post_loop(self, d_idx, d_dv, d_divv, d_cm):
-        invcm, cm, idmat = declare('matrix(9)', 3)
-        augcm = declare('matrix(18)')
-        dsi2, row, col, rowcol, drowcol, dim, dimsq = declare('int', 7)
-
-        dim = self.dim
-        dimsq = self.dimsq
-        dsi2 = dimsq * d_idx
-        identity(invcm, dim)
-        identity(idmat, dim)
-
-        for row in range(dim):
-            for col in range(dim):
-                rowcol = row * dim + col
-                drowcol = dsi2 + rowcol
-                invcm[rowcol] = d_cm[drowcol]
-
-        augmented_matrix(invcm, idmat, dim, dim, dim, augcm)
-        gj_solve(augcm, dim, dim, cm)
-
-        for row in range(dim):
-            for col in range(dim):
-                rowcol = row * dim + col
-                drowcol = dsi2 + rowcol
-                d_cm[drowcol] = cm[rowcol]
 
 
 class EvaluateTildeMu(Equation):
@@ -854,8 +844,9 @@ class EvaluateTildeMu(Equation):
         d_tilmu[d_idx] = -INFINITY
 
     def loop(self, d_tilmu, d_idx, d_h, VIJ, XIJ, R2IJ):
-        d_tilmu[d_idx] = max(d_tilmu[d_idx], d_h[d_idx] *
-                             dot(VIJ, XIJ, self.dim) / (R2IJ + 0.01))
+        d_tilmu[d_idx] = max(d_tilmu[d_idx],
+                             d_h[d_idx] * dot(VIJ, XIJ, self.dim) / (
+                                     R2IJ + 0.01))
 
 
 class MomentumAndEnergyStdGrad(Equation):
@@ -884,8 +875,8 @@ class MomentumAndEnergyStdGrad(Equation):
         d_aw[d_idx] = 0.0
         d_ae[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
-             d_au, d_av, d_aw, d_ae, XIJ, VIJ, d_alpha, s_alpha, d_ddv, s_ddv,
+    def loop(self, d_idx, s_idx, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho, d_au,
+             d_av, d_aw, d_ae, XIJ, VIJ, d_alpha, s_alpha, d_ddv, s_ddv,
              RHOIJ1, d_h, s_h, DWI, DWJ, d_dv, s_dv, d_de, s_de, d_dde, s_dde,
              d_e, s_e):
         etai, etaj, vij, mpinc, dvdel, ddvdeldel = declare('matrix(3)', 6)
@@ -936,18 +927,18 @@ class MomentumAndEnergyStdGrad(Equation):
 
             # [(\partial_j v^i) \delta^j]_a -
             # [(\partial_j v^i) \delta^j]_b
-            dedel -= (d_de[d_idx * dim + row] +
-                      s_de[s_idx * dim + row]) * mpinc[col]
+            dedel -= (d_de[d_idx * dim + row] + s_de[s_idx * dim + row]) * \
+                     mpinc[col]
 
             for col in range(dim):
                 rowcol = row * dim + col
 
                 # [(\partial_l \partial_m e) \delta^l \delta^m]_a -
                 # [(\partial_l \partial_m e) \delta^l \delta^m]_b
-                dvdel[row] -= (d_dv[dsi2 + rowcol] +
-                               s_dv[ssi2 + rowcol]) * mpinc[col]
-                ddedel += (d_dde[dsi2 + rowcol] -
-                           s_dde[ssi2 + rowcol]) * mpinc[row] * mpinc[col]
+                dvdel[row] -= (d_dv[dsi2 + rowcol] + s_dv[ssi2 + rowcol]) * \
+                              mpinc[col]
+                ddedel += (d_dde[dsi2 + rowcol] - s_dde[ssi2 + rowcol]) * \
+                          mpinc[row] * mpinc[col]
 
         for blk in range(dim):
             for row in range(dim):
@@ -956,9 +947,8 @@ class MomentumAndEnergyStdGrad(Equation):
 
                     # [(\partial_l \partial_m v^i) \delta^l \delta^m]_a -
                     # [(\partial_l \partial_m v^i) \delta^l \delta^m]_b
-                    ddvdeldel[row] += (d_ddv[dsi2 * dim + blkrowcol] -
-                                       s_ddv[ssi2 * dim + blkrowcol]
-                                       ) * mpinc[col] * mpinc[blk]
+                    ddvdeldel[row] += (d_ddv[dsi2 * dim + blkrowcol] - s_ddv[
+                        ssi2 * dim + blkrowcol]) * mpinc[col] * mpinc[blk]
 
         # Reconstructed differences and norm(DWIJ)
         sm = 0.0
@@ -972,10 +962,8 @@ class MomentumAndEnergyStdGrad(Equation):
         vsigng = sqrt(abs(d_p[d_idx] - s_p[s_idx]) * RHOIJ1)
         mui = min(0.0, dot(vij, etai, dim) / (etaisq + epssq))
         muj = min(0.0, dot(vij, etaj, dim) / (etajsq + epssq))
-        qi = d_rho[d_idx] * mui * (-d_alpha[d_idx] * d_cs[d_idx] +
-                                   beta * mui)
-        qj = s_rho[s_idx] * muj * (-s_alpha[s_idx] * s_cs[s_idx] +
-                                   beta * muj)
+        qi = d_rho[d_idx] * mui * (-d_alpha[d_idx] * d_cs[d_idx] + beta * mui)
+        qj = s_rho[s_idx] * muj * (-s_alpha[s_idx] * s_cs[s_idx] + beta * muj)
         pi = d_p[d_idx] + qi
         pj = s_p[s_idx] + qj
 
@@ -989,8 +977,8 @@ class MomentumAndEnergyStdGrad(Equation):
 
         # Accelerations for the thermal energy
         vijdotdwi = dot(VIJ, DWI, dim)
-        d_ae[d_idx] -= self.alphac * s_m[s_idx] * vsigng * eij * normdwij * \
-                       RHOIJ1
+        d_ae[d_idx] -= self.alphac * s_m[
+            s_idx] * vsigng * eij * normdwij * RHOIJ1
         d_ae[d_idx] += mjpibyrhoisq * vijdotdwi  # artificial conduction
 
 
@@ -1020,8 +1008,8 @@ class MomentumAndEnergyMI1(Equation):
         d_aw[d_idx] = 0.0
         d_ae[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
-             d_au, d_av, d_aw, d_ae, XIJ, VIJ, d_alpha, s_alpha, d_ddv, s_ddv,
+    def loop(self, d_idx, s_idx, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho, d_au,
+             d_av, d_aw, d_ae, XIJ, VIJ, d_alpha, s_alpha, d_ddv, s_ddv,
              RHOIJ1, d_h, s_h, d_cm, s_cm, WI, WJ, d_dv, s_dv, d_de, s_de,
              d_dde, s_dde, d_e, s_e):
         gmi, gmj, etai, etaj, vij, mpinc = declare('matrix(3)', 6)
@@ -1075,18 +1063,18 @@ class MomentumAndEnergyMI1(Equation):
 
             # [(\partial_j v^i) \delta^j]_a -
             # [(\partial_j v^i) \delta^j]_b
-            dedel -= (d_de[d_idx * dim + row] +
-                      s_de[s_idx * dim + row]) * mpinc[col]
+            dedel -= (d_de[d_idx * dim + row] + s_de[s_idx * dim + row]) * \
+                     mpinc[col]
 
             for col in range(dim):
                 rowcol = row * dim + col
 
                 # [(\partial_l \partial_m e) \delta^l \delta^m]_a -
                 # [(\partial_l \partial_m e) \delta^l \delta^m]_b
-                dvdel[row] -= (d_dv[dsi2 + rowcol] +
-                               s_dv[ssi2 + rowcol]) * mpinc[col]
-                ddedel += (d_dde[dsi2 + rowcol] -
-                           s_dde[ssi2 + rowcol]) * mpinc[row] * mpinc[col]
+                dvdel[row] -= (d_dv[dsi2 + rowcol] + s_dv[ssi2 + rowcol]) * \
+                              mpinc[col]
+                ddedel += (d_dde[dsi2 + rowcol] - s_dde[ssi2 + rowcol]) * \
+                          mpinc[row] * mpinc[col]
 
         for blk in range(dim):
             for row in range(dim):
@@ -1095,9 +1083,8 @@ class MomentumAndEnergyMI1(Equation):
 
                     # [(\partial_l \partial_m v^i) \delta^l \delta^m]_a -
                     # [(\partial_l \partial_m v^i) \delta^l \delta^m]_b
-                    ddvdeldel[row] += (d_ddv[dsi2 * dim + blkrowcol] -
-                                       s_ddv[ssi2 * dim + blkrowcol]
-                                       ) * mpinc[col] * mpinc[blk]
+                    ddvdeldel[row] += (d_ddv[dsi2 * dim + blkrowcol] - s_ddv[
+                        ssi2 * dim + blkrowcol]) * mpinc[col] * mpinc[blk]
 
         # Gradient functions and reconstructed differences
         sm = 0.0
@@ -1116,10 +1103,8 @@ class MomentumAndEnergyMI1(Equation):
         vsigng = sqrt(abs(d_p[d_idx] - s_p[s_idx]) * RHOIJ1)
         mui = min(0.0, dot(vij, etai, dim) / (etaisq + epssq))
         muj = min(0.0, dot(vij, etaj, dim) / (etajsq + epssq))
-        qi = d_rho[d_idx] * mui * (-d_alpha[d_idx] * d_cs[d_idx] +
-                                   beta * mui)
-        qj = s_rho[s_idx] * muj * (-s_alpha[s_idx] * s_cs[s_idx] +
-                                   beta * muj)
+        qi = d_rho[d_idx] * mui * (-d_alpha[d_idx] * d_cs[d_idx] + beta * mui)
+        qj = s_rho[s_idx] * muj * (-s_alpha[s_idx] * s_cs[s_idx] + beta * muj)
         pi = d_p[d_idx] + qi
         pj = s_p[s_idx] + qj
 
@@ -1133,8 +1118,8 @@ class MomentumAndEnergyMI1(Equation):
 
         # Accelerations for the thermal energy
         vijdotdwi = dot(VIJ, gmi, dim)
-        d_ae[d_idx] -= self.alphac * s_m[s_idx] * vsigng * eij * normgmij * \
-                       RHOIJ1
+        d_ae[d_idx] -= self.alphac * s_m[
+            s_idx] * vsigng * eij * normgmij * RHOIJ1
         d_ae[d_idx] += mjpibyrhoisq * vijdotdwi  # artificial conduction
 
 
@@ -1164,8 +1149,8 @@ class MomentumAndEnergyMI2(Equation):
         d_aw[d_idx] = 0.0
         d_ae[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho,
-             d_au, d_av, d_aw, d_ae, XIJ, VIJ, d_alpha, s_alpha, d_ddv, s_ddv,
+    def loop(self, d_idx, s_idx, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho, d_au,
+             d_av, d_aw, d_ae, XIJ, VIJ, d_alpha, s_alpha, d_ddv, s_ddv,
              RHOIJ1, d_h, s_h, d_cm, s_cm, WI, WJ, d_dv, s_dv, d_de, s_de,
              d_dde, s_dde, d_e, s_e):
         gmij, etai, etaj, vij, mpinc = declare('matrix(3)', 5)
@@ -1217,18 +1202,18 @@ class MomentumAndEnergyMI2(Equation):
 
             # [(\partial_j v^i) \delta^j]_a -
             # [(\partial_j v^i) \delta^j]_b
-            dedel -= (d_de[d_idx * dim + row] +
-                      s_de[s_idx * dim + row]) * mpinc[col]
+            dedel -= (d_de[d_idx * dim + row] + s_de[s_idx * dim + row]) * \
+                     mpinc[col]
 
             for col in range(dim):
                 rowcol = row * dim + col
 
                 # [(\partial_l \partial_m e) \delta^l \delta^m]_a -
                 # [(\partial_l \partial_m e) \delta^l \delta^m]_b
-                dvdel[row] -= (d_dv[dsi2 + rowcol] +
-                               s_dv[ssi2 + rowcol]) * mpinc[col]
-                ddedel += (d_dde[dsi2 + rowcol] -
-                           s_dde[ssi2 + rowcol]) * mpinc[row] * mpinc[col]
+                dvdel[row] -= (d_dv[dsi2 + rowcol] + s_dv[ssi2 + rowcol]) * \
+                              mpinc[col]
+                ddedel += (d_dde[dsi2 + rowcol] - s_dde[ssi2 + rowcol]) * \
+                          mpinc[row] * mpinc[col]
 
         for blk in range(dim):
             for row in range(dim):
@@ -1237,9 +1222,8 @@ class MomentumAndEnergyMI2(Equation):
 
                     # [(\partial_l \partial_m v^i) \delta^l \delta^m]_a -
                     # [(\partial_l \partial_m v^i) \delta^l \delta^m]_b
-                    ddvdeldel[row] += (d_ddv[dsi2 * dim + blkrowcol] -
-                                       s_ddv[ssi2 * dim + blkrowcol]
-                                       ) * mpinc[col] * mpinc[blk]
+                    ddvdeldel[row] += (d_ddv[dsi2 * dim + blkrowcol] - s_ddv[
+                        ssi2 * dim + blkrowcol]) * mpinc[col] * mpinc[blk]
 
         # Gradient functions and reconstructed differences
         sm = 0.0
@@ -1260,10 +1244,8 @@ class MomentumAndEnergyMI2(Equation):
         vsigng = sqrt(abs(d_p[d_idx] - s_p[s_idx]) * RHOIJ1)
         mui = min(0.0, dot(vij, etai, dim) / (etaisq + epssq))
         muj = min(0.0, dot(vij, etaj, dim) / (etajsq + epssq))
-        qi = d_rho[d_idx] * mui * (-d_alpha[d_idx] * d_cs[d_idx] +
-                                   beta * mui)
-        qj = s_rho[s_idx] * muj * (-s_alpha[s_idx] * s_cs[s_idx] +
-                                   beta * muj)
+        qi = d_rho[d_idx] * mui * (-d_alpha[d_idx] * d_cs[d_idx] + beta * mui)
+        qj = s_rho[s_idx] * muj * (-s_alpha[s_idx] * s_cs[s_idx] + beta * muj)
         pi = d_p[d_idx] + qi
         pj = s_p[s_idx] + qj
 
@@ -1277,8 +1259,8 @@ class MomentumAndEnergyMI2(Equation):
 
         # Accelerations for the thermal energy
         vijdotgmij = dot(VIJ, gmij, dim)
-        d_ae[d_idx] -= self.alphac * s_m[s_idx] * vsigng * eij * normgmij * \
-                       RHOIJ1
+        d_ae[d_idx] -= self.alphac * s_m[
+            s_idx] * vsigng * eij * normgmij * RHOIJ1
         d_ae[d_idx] += s_m[s_idx] * pi * invrhosq * vijdotgmij
 
 
@@ -1286,15 +1268,12 @@ class WallBoundary(Equation):
     """
         :class:`WallBoundary
         <pysph.sph.gas_dynamics.boundary_equations.WallBoundary>` modified
-        for TSPH.
+        for GADGET2.
 
-        Most importantly, mass of the boundary particle should never be zero
-        since it appears in denominator of fij. This has been addressed.
     """
 
     def initialize(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_h, d_htmp, d_h0,
-                   d_u, d_v, d_w, d_wij, d_n, d_dndh, d_divv,
-                   d_m0):
+                   d_u, d_v, d_w, d_wij, d_n, d_dndh, d_divv, d_m0):
         d_p[d_idx] = 0.0
         d_u[d_idx] = 0.0
         d_v[d_idx] = 0.0
@@ -1354,7 +1333,7 @@ class UpdateGhostProps(Equation):
         """
         :class:`MPMUpdateGhostProps
         <pysph.sph.gas_dynamics.basic.MPMUpdateGhostProps>` modified
-        for TSPH
+        for GADGET2
         """
         super().__init__(dest, sources)
         self.dim = dim
@@ -1364,7 +1343,7 @@ class UpdateGhostProps(Equation):
     def initialize(self, d_idx, d_orig_idx, d_p, d_tag, d_h, d_rho, d_dndh,
                    d_n, d_cm, d_dv, d_dvaux, d_ddv, d_dde, d_de, d_deaux):
         idx, dim, dimsq, row, col, rowcol = declare('int', 6)
-        blkrowcol, dsi2, si2 = declare('int', 3)
+        blkrowcol, dsi2, si2, drowcol, srowcol = declare('int', 3)
         if d_tag[d_idx] == 2:
             idx = d_orig_idx[d_idx]
             d_p[d_idx] = d_p[idx]
@@ -1381,21 +1360,26 @@ class UpdateGhostProps(Equation):
                 d_deaux[d_idx * dim + row] = d_de[idx * dim + row]
                 for col in range(dim):
                     rowcol = row * dim + col
-                    d_cm[dsi2 + rowcol] = d_cm[si2 + rowcol]
-                    d_dv[dsi2 + rowcol] = d_dv[si2 + rowcol]
-                    d_dvaux[dsi2 + rowcol] = d_dvaux[si2 + rowcol]
-                    d_dde[dsi2 + rowcol] = d_dde[si2 + rowcol]
+                    drowcol = dsi2 + rowcol
+                    srowcol = si2 + rowcol
+                    d_cm[drowcol] = d_cm[srowcol]
+                    d_dv[drowcol] = d_dv[srowcol]
+                    d_dvaux[drowcol] = d_dvaux[srowcol]
+                    d_dde[drowcol] = d_dde[srowcol]
 
             for blk in range(dim):
                 for row in range(dim):
                     for col in range(dim):
                         blkrowcol = blk * dimsq + row * dim + col
-                        d_ddv[dim * dsi2 + blkrowcol] = \
-                            d_ddv[dim * si2 + blkrowcol]
+                        d_ddv[dim * dsi2 + blkrowcol] = d_ddv[
+                            dim * si2 + blkrowcol]
 
 
 class TVDRK2Step(IntegratorStep):
-    """Predictor Corrector integrator for Gas-dynamics modified for TSPH"""
+    """
+    Total variation diminishing (TVD) second-order Runge–Kutta (RK2)
+    integrator step.
+    """
 
     def initialize(self, d_idx, d_x0, d_y0, d_z0, d_x, d_y, d_z, d_h, d_u0,
                    d_v0, d_w0, d_u, d_v, d_w, d_e, d_e0, d_h0, d_converged,
@@ -1420,8 +1404,8 @@ class TVDRK2Step(IntegratorStep):
 
     def stage1(self, d_idx, d_x0, d_y0, d_z0, d_x, d_y, d_z, d_u0, d_v0, d_w0,
                d_u, d_v, d_w, d_e0, d_e, d_au, d_av, d_aw, d_ae, d_rho, d_rho0,
-               d_arho, d_h, d_h0, d_ah, dt, d_n, d_n0, d_an, d_alpha,
-               d_alpha0, d_aalpha):
+               d_arho, d_h, d_h0, d_ah, dt, d_n, d_n0, d_an, d_alpha, d_alpha0,
+               d_aalpha):
         d_u[d_idx] = d_u0[d_idx] + dt * d_au[d_idx]
         d_v[d_idx] = d_v0[d_idx] + dt * d_av[d_idx]
         d_w[d_idx] = d_w0[d_idx] + dt * d_aw[d_idx]
@@ -1442,9 +1426,8 @@ class TVDRK2Step(IntegratorStep):
         d_alpha[d_idx] = d_alpha0[d_idx] + dt * d_aalpha[d_idx]
 
     def stage2(self, d_idx, d_x0, d_y0, d_z0, d_x, d_y, d_z, d_u0, d_v0, d_w0,
-               d_u, d_v, d_w, d_e0, d_e, d_au, d_av, d_aw, d_ae, dt,
-               d_alpha, d_alpha0, d_aalpha, d_h, d_tilmu, d_cs,
-               d_dt_adapt):
+               d_u, d_v, d_w, d_e0, d_e, d_au, d_av, d_aw, d_ae, dt, d_alpha,
+               d_alpha0, d_aalpha, d_h, d_tilmu, d_cs, d_dt_adapt):
         d_u[d_idx] = 0.5 * (d_u[d_idx] + d_u0[d_idx] + dt * d_au[d_idx])
         d_v[d_idx] = 0.5 * (d_v[d_idx] + d_v0[d_idx] + dt * d_av[d_idx])
         d_w[d_idx] = 0.5 * (d_w[d_idx] + d_w0[d_idx] + dt * d_aw[d_idx])
@@ -1453,25 +1436,25 @@ class TVDRK2Step(IntegratorStep):
         d_y[d_idx] = 0.5 * (d_y[d_idx] + d_y0[d_idx] + dt * d_v[d_idx])
         d_z[d_idx] = 0.5 * (d_z[d_idx] + d_z0[d_idx] + dt * d_w[d_idx])
 
-        # Update densities and smoothing lengths from the accelerations
         d_e[d_idx] = 0.5 * (d_e[d_idx] + d_e0[d_idx] + dt * d_ae[d_idx])
-        d_alpha[d_idx] = 0.5 * (
-                d_alpha[d_idx] + d_alpha0[d_idx] + dt * d_aalpha[d_idx])
+        d_alpha[d_idx] = 0.5 * (d_alpha[d_idx] + d_alpha0[d_idx] +
+                                dt * d_aalpha[d_idx])
 
-        fmag = sqrt(d_au[d_idx] * d_au[d_idx] +
-                    d_av[d_idx] * d_av[d_idx] +
+        # For adaptive time-stepping
+        fmag = sqrt(d_au[d_idx] * d_au[d_idx] + d_av[d_idx] * d_av[d_idx] +
                     d_aw[d_idx] * d_aw[d_idx])
 
         dt_force = sqrt(d_h[d_idx] / fmag)
-        dt_courant_visc = d_h[d_idx] / (d_cs[d_idx] + 0.6 * d_alpha[d_idx] *
-                                        (d_cs[d_idx] + 2.0 * d_tilmu[d_idx]))
+        dt_courant_visc = d_h[d_idx] / (d_cs[d_idx] + 0.6 * d_alpha[d_idx] * (
+                d_cs[d_idx] + 2.0 * d_tilmu[d_idx]))
 
         d_dt_adapt[d_idx] = 0.2 * min(dt_force, dt_courant_visc)
 
 
 class TVDRK2Integrator(Integrator):
     r"""
-    The system is advanced using:
+    Total variation diminishing (TVD) second-order Runge–Kutta (RK2)
+    integrator. The system is advanced using:
 
     .. math::
 
@@ -1502,7 +1485,8 @@ class TVDRK2Integrator(Integrator):
 
 class TVDRK2IntegratorWithRecycling(Integrator):
     r"""
-    The system is advanced using:
+    Total variation diminishing (TVD) second-order Runge–Kutta (RK2)
+    integrator with recycling of derivatives. The system is advanced using:
 
     .. math::
 
