@@ -36,7 +36,7 @@ GHOST_TAG = get_ghost_tag()
 
 class MAGMA2Scheme(Scheme):
     """
-    Magma2 formulations of Rosswog.
+    MAGMA2 formulations.
 
     Set of Equations: [Rosswog2020b]_
 
@@ -98,7 +98,7 @@ class MAGMA2Scheme(Scheme):
             :math:`f_{kern}`, Factor to scale smoothing length for equivalence
             when using kernel with altered `radius_scale`, by default 1.0.
         ndes : int, optional
-            :math:`n_{des}`, Desired Number of neighbours to be in the kernel
+            :math:`n_{des}`, Desired number of neighbours to be in the kernel
             support of each particle, by default 300 for 3D.
         recycle_accelerations : bool, optional
             Weather to recycle accelerations, i.e., weather the accelerations
@@ -235,7 +235,7 @@ class MAGMA2Scheme(Scheme):
                 g2.append(SummationDensity(dest=fluid, sources=all_pa))
                 g2.append(IdealGasEOS(dest=fluid, sources=None,
                                       gamma=self.gamma))
-                g2.append(AuxillaryGradient(dest=fluid, sources=all_pa,
+                g2.append(AuxiliaryGradient(dest=fluid, sources=all_pa,
                                             dim=self.dim))
             equations.append(Group(equations=g2))
 
@@ -250,22 +250,22 @@ class MAGMA2Scheme(Scheme):
                     Group(equations=g1, update_nnps=True, iterate=True,
                           max_iterations=self.max_density_iterations))
 
-                g2 = []
-                for fluid in self.fluids:
-                    g2.append(IdealGasEOS(dest=fluid, sources=None,
-                                          gamma=self.gamma))
-                    g2.append(AuxillaryGradient(dest=fluid, sources=all_pa,
-                                                dim=self.dim))
-                equations.append(Group(equations=g2))
+            g2 = []
+            for fluid in self.fluids:
+                g2.append(IdealGasEOS(dest=fluid, sources=None,
+                                      gamma=self.gamma))
+                g2.append(AuxiliaryGradient(dest=fluid, sources=all_pa,
+                                            dim=self.dim))
+            equations.append(Group(equations=g2))
 
-            else:
-                raise ValueError("adaptive_h_scheme must be one of "
-                                 "%r." % self.h_scheme_choices)
+        else:
+            raise ValueError("adaptive_h_scheme must be one of "
+                             "%r." % self.h_scheme_choices)
 
         g3p1 = []
         for fluid in self.fluids:
-            g3p1.append(
-                CorrectionMatrix(dest=fluid, sources=all_pa, dim=self.dim))
+            g3p1.append(CorrectionMatrix(dest=fluid, sources=all_pa,
+                                         dim=self.dim))
         equations.append(Group(equations=g3p1))
 
         g3p2 = []
@@ -372,11 +372,20 @@ class MAGMA2Scheme(Scheme):
 
 
 class IncreaseSmoothingLength(Equation):
+    """
+    Increase smoothing length by 10%.
+    """
     def post_loop(self, d_idx, d_h):
         d_h[d_idx] *= 1.10
 
 
 class UpdateSmoothingLength(Equation):
+    """
+    Sorts neighbours based on distance and uses the distance of nearest
+    :math:`(n_{des} + 1)^{th}` particle to set the smoothing length. Here,
+    :math:`n_{des}` is the desired number of number of neighbours to be in the
+    kernel support of each particle.
+    """
     def __init__(self, dest, sources, ndes):
         self.ndes = int(ndes)
         super().__init__(dest, sources)
@@ -504,58 +513,6 @@ class SummationDensityMPMStyle(Equation):
         return self.equation_has_converged
 
 
-class CorrectionMatrix(Equation):
-    def __init__(self, dest, sources, dim):
-        self.dim = dim
-        self.dimsq = dim * dim
-        super().__init__(dest, sources)
-
-    def _get_helpers_(self):
-        return [identity, augmented_matrix, gj_solve]
-
-    def initialize(self, d_cm, d_idx):
-        dsi, i, dimsq = declare('int', 3)
-        dimsq = self.dimsq
-        dsi = dimsq * d_idx
-        for i in range(dimsq):
-            d_cm[dsi + i] = 0.0
-
-    def loop(self, d_idx, s_m, s_idx, XIJ, s_rho, d_cm, WI):
-        dsi2, row, col, drowcol, dim, dimsq = declare('int', 6)
-        dim = self.dim
-        dimsq = self.dimsq
-        dsi2 = d_idx * dimsq
-        mbbyrhob = s_m[s_idx] / s_rho[s_idx]
-        for row in range(dim):
-            for col in range(dim):
-                drowcol = dsi2 + row * dim + col
-                d_cm[drowcol] += mbbyrhob * XIJ[row] * XIJ[col] * WI
-
-    def post_loop(self, d_idx, d_dv, d_divv, d_cm):
-        invcm, cm, idmat = declare('matrix(9)', 3)
-        augcm = declare('matrix(18)')
-        dsi2, row, col, rowcol, dim, dimsq = declare('int', 6)
-
-        dim = self.dim
-        dimsq = self.dimsq
-        dsi2 = dimsq * d_idx
-        identity(invcm, dim)
-        identity(idmat, dim)
-
-        for row in range(dim):
-            for col in range(dim):
-                rowcol = row * dim + col
-                invcm[rowcol] = d_cm[dsi2 + rowcol]
-
-        augmented_matrix(invcm, idmat, dim, dim, dim, augcm)
-        gj_solve(augcm, dim, dim, cm)
-
-        for row in range(dim):
-            for col in range(dim):
-                rowcol = row * dim + col
-                d_cm[dsi2 + rowcol] = cm[rowcol]
-
-
 class IdealGasEOS(Equation):
     """
     :class:`IdealGasEOS
@@ -575,7 +532,7 @@ class IdealGasEOS(Equation):
         d_cs[d_idx] = sqrt(self.gamma * d_p[d_idx] / d_rho[d_idx])
 
 
-class AuxillaryGradient(Equation):
+class AuxiliaryGradient(Equation):
     """
     Auxiliary first gradient calculated using analytical gradient of kernel
     and without using density.
@@ -641,6 +598,63 @@ class AuxillaryGradient(Equation):
             for col in range(dim):
                 rowcol = row * dim + col
                 d_dvaux[dsi2 + rowcol] = dvaux[rowcol]
+
+
+class CorrectionMatrix(Equation):
+    """
+    Correction matrix, C, that accounts for the local particle distribution and
+    used in calculation of gradients without using analytical derivatives of
+    kernel.
+    """
+    def __init__(self, dest, sources, dim):
+        self.dim = dim
+        self.dimsq = dim * dim
+        super().__init__(dest, sources)
+
+    def _get_helpers_(self):
+        return [identity, augmented_matrix, gj_solve]
+
+    def initialize(self, d_cm, d_idx):
+        dsi, i, dimsq = declare('int', 3)
+        dimsq = self.dimsq
+        dsi = dimsq * d_idx
+        for i in range(dimsq):
+            d_cm[dsi + i] = 0.0
+
+    def loop(self, d_idx, s_m, s_idx, XIJ, s_rho, d_cm, WI):
+        dsi2, row, col, drowcol, dim, dimsq = declare('int', 6)
+        dim = self.dim
+        dimsq = self.dimsq
+        dsi2 = d_idx * dimsq
+        mbbyrhob = s_m[s_idx] / s_rho[s_idx]
+        for row in range(dim):
+            for col in range(dim):
+                drowcol = dsi2 + row * dim + col
+                d_cm[drowcol] += mbbyrhob * XIJ[row] * XIJ[col] * WI
+
+    def post_loop(self, d_idx, d_dv, d_divv, d_cm):
+        invcm, cm, idmat = declare('matrix(9)', 3)
+        augcm = declare('matrix(18)')
+        dsi2, row, col, rowcol, dim, dimsq = declare('int', 6)
+
+        dim = self.dim
+        dimsq = self.dimsq
+        dsi2 = dimsq * d_idx
+        identity(invcm, dim)
+        identity(idmat, dim)
+
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * dim + col
+                invcm[rowcol] = d_cm[dsi2 + rowcol]
+
+        augmented_matrix(invcm, idmat, dim, dim, dim, augcm)
+        gj_solve(augcm, dim, dim, cm)
+
+        for row in range(dim):
+            for col in range(dim):
+                rowcol = row * dim + col
+                d_cm[dsi2 + rowcol] = cm[rowcol]
 
 
 class FirstGradient(Equation):
@@ -802,6 +816,9 @@ class SecondGradient(Equation):
 
 
 class EntropyBasedDissipationTrigger(Equation):
+    """
+    Simple, entropy-based dissipation trigger from [Rosswog2020a]_
+    """
     def __init__(self, dest, sources, alphamax, alphamin, fkern, l0, l1,
                  gamma):
         self.alphamax = alphamax
@@ -829,21 +846,115 @@ class EntropyBasedDissipationTrigger(Equation):
             d_aalpha[d_idx] = 0.0
 
 
-class EvaluateTildeMu(Equation):
-    def _get_helpers_(self):
-        return [dot]
+class WallBoundary(Equation):
+    """
+        :class:`WallBoundary
+        <pysph.sph.gas_dynamics.boundary_equations.WallBoundary>` modified
+        for GADGET2.
 
-    def __init__(self, dest, sources, dim):
-        self.dim = dim
+    """
+
+    def initialize(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_h, d_htmp, d_h0,
+                   d_u, d_v, d_w, d_wij, d_n, d_dndh, d_divv, d_m0):
+        d_p[d_idx] = 0.0
+        d_u[d_idx] = 0.0
+        d_v[d_idx] = 0.0
+        d_w[d_idx] = 0.0
+        d_m0[d_idx] = d_m[d_idx]
+        d_m[d_idx] = 0.0
+        d_rho[d_idx] = 0.0
+        d_e[d_idx] = 0.0
+        d_cs[d_idx] = 0.0
+        d_divv[d_idx] = 0.0
+        d_wij[d_idx] = 0.0
+        d_h[d_idx] = d_h0[d_idx]
+        d_htmp[d_idx] = 0.0
+        d_n[d_idx] = 0.0
+        d_dndh[d_idx] = 0.0
+
+    def loop(self, d_idx, s_idx, d_p, d_rho, d_e, d_m, d_cs, d_divv, d_h, d_u,
+             d_v, d_w, d_wij, d_htmp, s_p, s_rho, s_e, s_m, s_cs, s_h, s_divv,
+             s_u, s_v, s_w, WI, s_n, d_n, s_dndh, d_dndh):
+        d_wij[d_idx] += WI
+        d_p[d_idx] += s_p[s_idx] * WI
+        d_u[d_idx] -= s_u[s_idx] * WI
+        d_v[d_idx] -= s_v[s_idx] * WI
+        d_w[d_idx] -= s_w[s_idx] * WI
+        d_m[d_idx] += s_m[s_idx] * WI
+        d_rho[d_idx] += s_rho[s_idx] * WI
+        d_e[d_idx] += s_e[s_idx] * WI
+        d_cs[d_idx] += s_cs[s_idx] * WI
+        d_divv[d_idx] += s_divv[s_idx] * WI
+        d_htmp[d_idx] += s_h[s_idx] * WI
+        d_n[d_idx] += s_n[s_idx] * WI
+        d_dndh[d_idx] += s_dndh[s_idx] * WI
+
+    def post_loop(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_divv, d_h, d_u,
+                  d_v, d_w, d_wij, d_htmp, d_n, d_dndh, d_m0):
+        if d_wij[d_idx] > 1e-30:
+            d_p[d_idx] = d_p[d_idx] / d_wij[d_idx]
+            d_u[d_idx] = d_u[d_idx] / d_wij[d_idx]
+            d_v[d_idx] = d_v[d_idx] / d_wij[d_idx]
+            d_w[d_idx] = d_w[d_idx] / d_wij[d_idx]
+            d_m[d_idx] = d_m[d_idx] / d_wij[d_idx]
+            d_rho[d_idx] = d_rho[d_idx] / d_wij[d_idx]
+            d_e[d_idx] = d_e[d_idx] / d_wij[d_idx]
+            d_cs[d_idx] = d_cs[d_idx] / d_wij[d_idx]
+            d_divv[d_idx] = d_divv[d_idx] / d_wij[d_idx]
+            d_h[d_idx] = d_htmp[d_idx] / d_wij[d_idx]
+            d_n[d_idx] = d_n[d_idx] / d_wij[d_idx]
+            d_dndh[d_idx] = d_dndh[d_idx] / d_wij[d_idx]
+
+        # Secret Sauce
+        if d_m[d_idx] < 1e-10:
+            d_m[d_idx] = d_m0[d_idx]
+
+
+class UpdateGhostProps(Equation):
+    def __init__(self, dest, dim, sources=None):
+        """
+        :class:`MPMUpdateGhostProps
+        <pysph.sph.gas_dynamics.basic.MPMUpdateGhostProps>` modified
+        for GADGET2
+        """
         super().__init__(dest, sources)
+        self.dim = dim
+        self.dimsq = dim * dim
+        assert GHOST_TAG == 2
 
-    def initialize(self, d_idx, d_tilmu):
-        d_tilmu[d_idx] = -INFINITY
+    def initialize(self, d_idx, d_orig_idx, d_p, d_tag, d_h, d_rho, d_dndh,
+                   d_n, d_cm, d_dv, d_dvaux, d_ddv, d_dde, d_de, d_deaux):
+        idx, dim, dimsq, row, col, rowcol, blk = declare('int', 7)
+        blkrowcol, dsi2, si2, drowcol, srowcol = declare('int', 5)
+        if d_tag[d_idx] == 2:
+            idx = d_orig_idx[d_idx]
+            d_p[d_idx] = d_p[idx]
+            d_h[d_idx] = d_h[idx]
+            d_rho[d_idx] = d_rho[idx]
+            d_dndh[d_idx] = d_dndh[idx]
+            d_n[d_idx] = d_n[idx]
+            dim = self.dim
+            dimsq = self.dimsq
+            dsi2 = dimsq * d_idx
+            si2 = dimsq * idx
+            for row in range(dim):
+                d_de[d_idx * dim + row] = d_de[idx * dim + row]
+                d_deaux[d_idx * dim + row] = d_de[idx * dim + row]
+                for col in range(dim):
+                    rowcol = row * dim + col
+                    drowcol = dsi2 + rowcol
+                    srowcol = si2 + rowcol
+                    d_cm[drowcol] = d_cm[srowcol]
+                    d_dv[drowcol] = d_dv[srowcol]
+                    d_dvaux[drowcol] = d_dvaux[srowcol]
+                    d_dde[drowcol] = d_dde[srowcol]
 
-    def loop(self, d_tilmu, d_idx, d_h, VIJ, XIJ, R2IJ):
-        d_tilmu[d_idx] = max(d_tilmu[d_idx],
-                             d_h[d_idx] * dot(VIJ, XIJ, self.dim) / (
-                                     R2IJ + 0.01))
+            for blk in range(dim):
+                for row in range(dim):
+                    for col in range(dim):
+                        blkrowcol = blk * dimsq + row * dim + col
+                        d_ddv[dim * dsi2 + blkrowcol] = d_ddv[dim * si2 +
+                                                              blkrowcol]
 
 
 class MomentumAndEnergyStdGrad(Equation):
@@ -1261,115 +1372,24 @@ class MomentumAndEnergyMI2(Equation):
         d_ae[d_idx] += s_m[s_idx] * pi * invrhosq * vijdotgmij
 
 
-class WallBoundary(Equation):
+class EvaluateTildeMu(Equation):
     """
-        :class:`WallBoundary
-        <pysph.sph.gas_dynamics.boundary_equations.WallBoundary>` modified
-        for GADGET2.
-
+    Find :math:`\\tilde{\\mu}` to calculate time step.
     """
-
-    def initialize(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_h, d_htmp, d_h0,
-                   d_u, d_v, d_w, d_wij, d_n, d_dndh, d_divv, d_m0):
-        d_p[d_idx] = 0.0
-        d_u[d_idx] = 0.0
-        d_v[d_idx] = 0.0
-        d_w[d_idx] = 0.0
-        d_m0[d_idx] = d_m[d_idx]
-        d_m[d_idx] = 0.0
-        d_rho[d_idx] = 0.0
-        d_e[d_idx] = 0.0
-        d_cs[d_idx] = 0.0
-        d_divv[d_idx] = 0.0
-        d_wij[d_idx] = 0.0
-        d_h[d_idx] = d_h0[d_idx]
-        d_htmp[d_idx] = 0.0
-        d_n[d_idx] = 0.0
-        d_dndh[d_idx] = 0.0
-
-    def loop(self, d_idx, s_idx, d_p, d_rho, d_e, d_m, d_cs, d_divv, d_h, d_u,
-             d_v, d_w, d_wij, d_htmp, s_p, s_rho, s_e, s_m, s_cs, s_h, s_divv,
-             s_u, s_v, s_w, WI, s_n, d_n, s_dndh, d_dndh):
-        d_wij[d_idx] += WI
-        d_p[d_idx] += s_p[s_idx] * WI
-        d_u[d_idx] -= s_u[s_idx] * WI
-        d_v[d_idx] -= s_v[s_idx] * WI
-        d_w[d_idx] -= s_w[s_idx] * WI
-        d_m[d_idx] += s_m[s_idx] * WI
-        d_rho[d_idx] += s_rho[s_idx] * WI
-        d_e[d_idx] += s_e[s_idx] * WI
-        d_cs[d_idx] += s_cs[s_idx] * WI
-        d_divv[d_idx] += s_divv[s_idx] * WI
-        d_htmp[d_idx] += s_h[s_idx] * WI
-        d_n[d_idx] += s_n[s_idx] * WI
-        d_dndh[d_idx] += s_dndh[s_idx] * WI
-
-    def post_loop(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_divv, d_h, d_u,
-                  d_v, d_w, d_wij, d_htmp, d_n, d_dndh, d_m0):
-        if d_wij[d_idx] > 1e-30:
-            d_p[d_idx] = d_p[d_idx] / d_wij[d_idx]
-            d_u[d_idx] = d_u[d_idx] / d_wij[d_idx]
-            d_v[d_idx] = d_v[d_idx] / d_wij[d_idx]
-            d_w[d_idx] = d_w[d_idx] / d_wij[d_idx]
-            d_m[d_idx] = d_m[d_idx] / d_wij[d_idx]
-            d_rho[d_idx] = d_rho[d_idx] / d_wij[d_idx]
-            d_e[d_idx] = d_e[d_idx] / d_wij[d_idx]
-            d_cs[d_idx] = d_cs[d_idx] / d_wij[d_idx]
-            d_divv[d_idx] = d_divv[d_idx] / d_wij[d_idx]
-            d_h[d_idx] = d_htmp[d_idx] / d_wij[d_idx]
-            d_n[d_idx] = d_n[d_idx] / d_wij[d_idx]
-            d_dndh[d_idx] = d_dndh[d_idx] / d_wij[d_idx]
-
-        # Secret Sauce
-        if d_m[d_idx] < 1e-10:
-            d_m[d_idx] = d_m0[d_idx]
-
-
-class UpdateGhostProps(Equation):
-    def __init__(self, dest, dim, sources=None):
-        """
-        :class:`MPMUpdateGhostProps
-        <pysph.sph.gas_dynamics.basic.MPMUpdateGhostProps>` modified
-        for GADGET2
-        """
-        super().__init__(dest, sources)
+    def __init__(self, dest, sources, dim):
         self.dim = dim
-        self.dimsq = dim * dim
-        assert GHOST_TAG == 2
+        super().__init__(dest, sources)
 
-    def initialize(self, d_idx, d_orig_idx, d_p, d_tag, d_h, d_rho, d_dndh,
-                   d_n, d_cm, d_dv, d_dvaux, d_ddv, d_dde, d_de, d_deaux):
-        idx, dim, dimsq, row, col, rowcol, blk = declare('int', 7)
-        blkrowcol, dsi2, si2, drowcol, srowcol = declare('int', 5)
-        if d_tag[d_idx] == 2:
-            idx = d_orig_idx[d_idx]
-            d_p[d_idx] = d_p[idx]
-            d_h[d_idx] = d_h[idx]
-            d_rho[d_idx] = d_rho[idx]
-            d_dndh[d_idx] = d_dndh[idx]
-            d_n[d_idx] = d_n[idx]
-            dim = self.dim
-            dimsq = self.dimsq
-            dsi2 = dimsq * d_idx
-            si2 = dimsq * idx
-            for row in range(dim):
-                d_de[d_idx * dim + row] = d_de[idx * dim + row]
-                d_deaux[d_idx * dim + row] = d_de[idx * dim + row]
-                for col in range(dim):
-                    rowcol = row * dim + col
-                    drowcol = dsi2 + rowcol
-                    srowcol = si2 + rowcol
-                    d_cm[drowcol] = d_cm[srowcol]
-                    d_dv[drowcol] = d_dv[srowcol]
-                    d_dvaux[drowcol] = d_dvaux[srowcol]
-                    d_dde[drowcol] = d_dde[srowcol]
+    def _get_helpers_(self):
+        return [dot]
 
-            for blk in range(dim):
-                for row in range(dim):
-                    for col in range(dim):
-                        blkrowcol = blk * dimsq + row * dim + col
-                        d_ddv[dim * dsi2 + blkrowcol] = d_ddv[dim * si2 +
-                                                              blkrowcol]
+    def initialize(self, d_idx, d_tilmu):
+        d_tilmu[d_idx] = -INFINITY
+
+    def loop(self, d_tilmu, d_idx, d_h, VIJ, XIJ, R2IJ):
+        d_tilmu[d_idx] = max(d_tilmu[d_idx],
+                             d_h[d_idx] * dot(VIJ, XIJ, self.dim) / (
+                                     R2IJ + 0.01))
 
 
 class TVDRK2Step(IntegratorStep):

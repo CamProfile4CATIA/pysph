@@ -100,7 +100,12 @@ MAGMA2
 --------------
 
 .. automodule:: pysph.sph.gas_dynamics.magma2
-   :members: SummationDensityMPMStyle
+   :members: IncreaseSmoothingLength, UpdateSmoothingLength,
+             SummationDensityMPMStyle, IdealGasEOS, AuxiliaryGradient,
+             CorrectionMatrix, FirstGradient, SecondGradient,
+             EntropyBasedDissipationTrigger, WallBoundary, UpdateGhostProps
+             MomentumAndEnergyMI1, MomentumAndEnergyMI2,
+             MomentumAndEnergyStdGrad, EvaluateTildeMu
    :undoc-members:
    :member-order: bysource
 
