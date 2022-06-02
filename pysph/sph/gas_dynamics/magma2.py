@@ -47,8 +47,8 @@ class MAGMA2Scheme(Scheme):
                  adaptive_h_scheme='magma2', max_density_iterations=250,
                  density_iteration_tolerance=1e-3, alphamax=1.0, alphamin=0.1,
                  alphac=0.05, beta=2.0, eps=0.01, eta_crit=0.3, eta_fold=0.2,
-                 fkern=1.0, ndes=300, recycle_accelerations=True,
-                 has_ghosts=False):
+                 fkern=1.0, ndes=300, reconstruction_order=2,
+                 recycle_accelerations=True, has_ghosts=False):
         """
         Parameters
         ----------
@@ -100,6 +100,8 @@ class MAGMA2Scheme(Scheme):
         ndes : int, optional
             :math:`n_{des}`, Desired number of neighbours to be in the kernel
             support of each particle, by default 300 for 3D.
+        reconstruction_order : int, optional
+            Order of reconstruction, by default 2.
         recycle_accelerations : bool, optional
             Weather to recycle accelerations, i.e., weather the accelerations
             used in the correction step can be reused in the successive
@@ -110,6 +112,7 @@ class MAGMA2Scheme(Scheme):
         """
         self.h_scheme_choices = {'magma2', 'mpm'}
         self.formulation_choices = {'mi1', 'mi2', 'stdgrad'}
+        self.reconstruction_order_choices = {0, 1, 2}
         self.fluids = fluids
         self.solids = solids
         self.dim = dim
@@ -131,6 +134,7 @@ class MAGMA2Scheme(Scheme):
         self.ndes = ndes
         self.adaptive_h_scheme = adaptive_h_scheme
         self.formulation = formulation
+        self.reconstruction_order = reconstruction_order
 
     def add_user_options(self, group):
         group.add_argument("--adaptive-h", action="store",
@@ -144,6 +148,13 @@ class MAGMA2Scheme(Scheme):
                            help="Specify the set of governing equations for "
                                 "momentum and energy: "
                                 "%s" % self.formulation_choices)
+
+        group.add_argument("--reconstruction-order", action="store",
+                           dest="reconstruction_order", type=int, default=None,
+                           choices=self.reconstruction_order_choices,
+                           help="Specify the order for reconstruction of "
+                                "velocity and internal energy: "
+                                "%s" % self.reconstruction_order_choices)
 
         group.add_argument("--alpha-max", action="store", type=float,
                            dest="alphamax", default=None,
@@ -169,7 +180,7 @@ class MAGMA2Scheme(Scheme):
 
     def consume_user_options(self, options):
         vars = ['gamma', 'alphamax', 'beta', 'adaptive_h_scheme', 'ndes',
-                'recycle_accelerations', 'formulation']
+                'recycle_accelerations', 'formulation', 'reconstruction_order']
         data = dict((var, self._smart_getattr(options, var)) for var in vars)
         self.configure(**data)
 
@@ -216,6 +227,10 @@ class MAGMA2Scheme(Scheme):
 
         all_pa = self.fluids + self.solids
 
+        if self.reconstruction_order not in self.reconstruction_order_choices:
+            raise ValueError("reconstruction_order must be one of: "
+                             "%r." % self.reconstruction_order_choices)
+
         equations = []
         if self.adaptive_h_scheme == "magma2":
             g1p0 = []
@@ -235,8 +250,9 @@ class MAGMA2Scheme(Scheme):
                 g2.append(SummationDensity(dest=fluid, sources=all_pa))
                 g2.append(IdealGasEOS(dest=fluid, sources=None,
                                       gamma=self.gamma))
-                g2.append(AuxiliaryGradient(dest=fluid, sources=all_pa,
-                                            dim=self.dim))
+                if self.reconstruction_order > 1:
+                    g2.append(AuxiliaryGradient(dest=fluid, sources=all_pa,
+                                                dim=self.dim))
             equations.append(Group(equations=g2))
 
         elif self.adaptive_h_scheme == "mpm":
@@ -254,12 +270,13 @@ class MAGMA2Scheme(Scheme):
             for fluid in self.fluids:
                 g2.append(IdealGasEOS(dest=fluid, sources=None,
                                       gamma=self.gamma))
-                g2.append(AuxiliaryGradient(dest=fluid, sources=all_pa,
-                                            dim=self.dim))
+                if self.reconstruction_order > 1:
+                    g2.append(AuxiliaryGradient(dest=fluid, sources=all_pa,
+                                                dim=self.dim))
             equations.append(Group(equations=g2))
 
         else:
-            raise ValueError("adaptive_h_scheme must be one of "
+            raise ValueError("adaptive_h_scheme must be one of: "
                              "%r." % self.h_scheme_choices)
 
         g3p1 = []
@@ -270,10 +287,12 @@ class MAGMA2Scheme(Scheme):
 
         g3p2 = []
         for fluid in self.fluids:
-            g3p2.append(FirstGradient(dest=fluid, sources=all_pa,
-                                      dim=self.dim))
-            g3p2.append(SecondGradient(dest=fluid, sources=all_pa,
-                                       dim=self.dim))
+            if self.reconstruction_order > 0:
+                g3p2.append(FirstGradient(dest=fluid, sources=all_pa,
+                                          dim=self.dim))
+            if self.reconstruction_order > 1:
+                g3p2.append(SecondGradient(dest=fluid, sources=all_pa,
+                                           dim=self.dim))
             g3p2.append(EntropyBasedDissipationTrigger(dest=fluid,
                                                        sources=None,
                                                        alphamax=self.alphamax,
@@ -324,7 +343,7 @@ class MAGMA2Scheme(Scheme):
                                                    alphac=self.alphac,
                                                    eps=self.eps))
             else:
-                raise ValueError("formulation must be one of "
+                raise ValueError("formulation must be one of: "
                                  "%r." % self.formulation_choices)
             g5.append(
                 EvaluateTildeMu(dest=fluid, sources=all_pa, dim=self.dim))
@@ -341,9 +360,10 @@ class MAGMA2Scheme(Scheme):
                  'converged', 'ah', 'arho', 'dt_cfl', 'e0', 'rho0', 'u0', 'v0',
                  'w0', 'x0', 'y0', 'z0']
         more_props = ['n', 'dndh', 'prevn', 'prevdndh', 'divv', 'an', 'n0',
-                      'alpha0', 'aalpha', 'tilmu', 'dt_adapt']
+                      'alpha0', 'aalpha', 'tilmu', 'dt_adapt', 'prevdrhosumdh',
+                      'drhosumdh']
         props.extend(more_props)
-        output_props = 'rho p u v w x y z e n divv h alpha'.split(' ')
+        output_props = 'm rho p u v w x y z e n divv h alpha'.split(' ')
         for fluid in self.fluids:
             pa = particle_arrays[fluid]
             self._ensure_properties(pa, props, clean)
@@ -352,14 +372,14 @@ class MAGMA2Scheme(Scheme):
             pa.add_property('n', data=pa.rho / pa.m)
             pa.add_property('s', data=pa.p / (pa.rho ** self.gamma))
             pa.add_property('alpha', data=self.alphamin)
-            pa.add_property('dv', stride=9)
-            pa.add_property('dvaux', stride=9)
-            pa.add_property('invdm', stride=9)
-            pa.add_property('cm', stride=9)
-            pa.add_property('ddv', stride=27)
-            pa.add_property('de', stride=3)
-            pa.add_property('dde', stride=9)
-            pa.add_property('deaux', stride=3)
+            pa.add_property('dv', stride=9, data=0.0)
+            pa.add_property('dvaux', stride=9, data=0.0)
+            pa.add_property('invdm', stride=9, data=0.0)
+            pa.add_property('cm', stride=9, data=0.0)
+            pa.add_property('ddv', stride=27, data=0.0)
+            pa.add_property('de', stride=3, data=0.0)
+            pa.add_property('dde', stride=9, data=0.0)
+            pa.add_property('deaux', stride=3, data=0.0)
             nfp = pa.get_number_of_particles()
             pa.orig_idx[:] = numpy.arange(nfp)
             pa.set_output_arrays(output_props)
@@ -375,6 +395,7 @@ class IncreaseSmoothingLength(Equation):
     """
     Increase smoothing length by 10%.
     """
+
     def post_loop(self, d_idx, d_h):
         d_h[d_idx] *= 1.10
 
@@ -386,6 +407,7 @@ class UpdateSmoothingLength(Equation):
     :math:`n_{des}` is the desired number of number of neighbours to be in the
     kernel support of each particle.
     """
+
     def __init__(self, dest, sources, ndes):
         self.ndes = int(ndes)
         super().__init__(dest, sources)
@@ -606,6 +628,7 @@ class CorrectionMatrix(Equation):
     used in calculation of gradients without using analytical derivatives of
     kernel.
     """
+
     def __init__(self, dest, sources, dim):
         self.dim = dim
         self.dimsq = dim * dim
@@ -819,6 +842,7 @@ class EntropyBasedDissipationTrigger(Equation):
     """
     Simple, entropy-based dissipation trigger from [Rosswog2020a]_
     """
+
     def __init__(self, dest, sources, alphamax, alphamin, fkern, l0, l1,
                  gamma):
         self.alphamax = alphamax
@@ -1376,6 +1400,7 @@ class EvaluateTildeMu(Equation):
     """
     Find :math:`\\tilde{\\mu}` to calculate time step.
     """
+
     def __init__(self, dest, sources, dim):
         self.dim = dim
         super().__init__(dest, sources)

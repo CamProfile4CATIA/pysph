@@ -10,7 +10,6 @@ from pysph.base.nnps import DomainManager
 import numpy
 from pysph.base.utils import get_particle_array as gpa
 
-
 # Numerical constants
 dim = 1
 gamma = 1.4
@@ -48,10 +47,10 @@ class SodShockTube(ShockTubeSetup):
     def consume_user_options(self):
         self.nl = self.options.nl
         self.hdx = self.options.hdx
-        ratio = self.rhor/self.rhol
-        self.nr = self.nl*ratio
-        self.dxl = 0.5/self.nl
-        self.dxr = 0.5/self.nr
+        ratio = self.rhor / self.rhol
+        self.nr = self.nl * ratio
+        self.dxl = 0.5 / self.nl
+        self.dxr = 0.5 / self.nr
         self.ml = self.dxl * self.rhol
         self.h0 = self.hdx * self.dxr
         self.hdx = self.hdx
@@ -70,7 +69,7 @@ class SodShockTube(ShockTubeSetup):
 
         xmin = self.xmin
         xmax = self.xmax
-        dx = (xmax-xmin)/720
+        dx = (xmax - xmin) / 720
         pl = self.pl
         pr = self.pr
         h0 = self.h0
@@ -86,7 +85,6 @@ class SodShockTube(ShockTubeSetup):
         x1 = xt[left_indices]
         x2 = xt[right_indices]
 
-
         x = numpy.concatenate([x1, x2])
 
         right_indices = numpy.where(x > 0.0)[0]
@@ -100,9 +98,9 @@ class SodShockTube(ShockTubeSetup):
         # u = numpy.ones_like(x) * ul
         # u[right_indices] = ur
 
-        rho = (self.rhol-self.rhor)/(1+numpy.exp(x/dx)) + self.rhor
-        p = (self.pl-self.pr)/(1+numpy.exp(x/dx)) + self.pr
-        u = (self.ul-self.ur)/(1+numpy.exp(x/dx)) + self.ur
+        rho = (self.rhol - self.rhor) / (1 + numpy.exp(x / dx)) + self.rhor
+        p = (self.pl - self.pr) / (1 + numpy.exp(x / dx)) + self.pr
+        u = (self.ul - self.ur) / (1 + numpy.exp(x / dx)) + self.ur
 
         m = dx * rho
 
@@ -111,8 +109,6 @@ class SodShockTube(ShockTubeSetup):
         e = p / (gamma1 * rho)
         # e = numpy.cos(x) + 2
         wij = numpy.ones_like(x)
-
-
 
         constants = {}
         fluid = gpa(
@@ -133,7 +129,7 @@ class SodShockTube(ShockTubeSetup):
         scheme = self.scheme
         if self.options.scheme in ['gsph', 'mpm']:
             scheme.configure(kernel_factor=self.hdx)
-        elif self.options.scheme in ['psph', 'tsph', 'nsrsph']:
+        elif self.options.scheme in ['psph', 'tsph', 'magma2']:
             scheme.configure(hfact=self.hdx)
         scheme.configure_solver(tf=self.tf, dt=self.dt)
 
@@ -166,12 +162,13 @@ class SodShockTube(ShockTubeSetup):
 
         tsph = TSPHScheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            hfact=None
+            hfact=None, has_ghosts=True
         )
 
         magma2 = MAGMA2Scheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            hfact=None, has_ghosts=True, ndes=7
+            hfact=None, has_ghosts=True, ndes=7, formulation='mi2',
+            reconstruction_order=2, adaptive_h_scheme='mpm'
         )
 
         s = SchemeChooser(
