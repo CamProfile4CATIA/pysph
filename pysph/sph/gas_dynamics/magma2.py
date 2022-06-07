@@ -367,6 +367,10 @@ class MAGMA2Scheme(Scheme):
         for fluid in self.fluids:
             pa = particle_arrays[fluid]
             self._ensure_properties(pa, props, clean)
+            # The initial smoothing length needs to be huge if using
+            # adaptive_h_scheme='magma2'
+            if self.adaptive_h_scheme == 'magma2':
+                pa.h = 2.0 * pa.h
             pa.add_property('orig_idx', type='int')
             # Guess for number density.
             pa.add_property('n', data=pa.rho / pa.m)
@@ -421,16 +425,14 @@ class UpdateSmoothingLength(Equation):
         ndes = self.ndes
         s_idx = declare('long')
         xij = declare('matrix(3)')
-        rij = declare('matrix(500)')
-        nidx = declare('matrix(500, "long")')
+        rij = declare('matrix(1000)')  # May set a bigger or a smaller size.
         for i in range(N_NBRS):
             s_idx = NBRS[i]
             xij[0] = d_x[d_idx] - s_x[s_idx]
             xij[1] = d_y[d_idx] - s_y[s_idx]
             xij[2] = d_z[d_idx] - s_z[s_idx]
             rij[i] = sqrt(xij[0] * xij[0] + xij[1] * xij[1] + xij[2] * xij[2])
-            nidx[i] = s_idx
-        quicksort(nidx, rij, 0, N_NBRS - 1)
+        quicksort(rij, 0, N_NBRS - 1)
 
         # Scheme recommends using (ndes + 1)th rij. The min() used below is
         # just an extra precaution. Btw, index of (ndes + 1)th element is ndes
@@ -1562,8 +1564,8 @@ class TVDRK2IntegratorWithRecycling(Integrator):
         self.do_post_stage(dt, 2)
 
 
-@annotate(fst='int', lst='int', key='doublep', arr='longp')
-def quicksort(arr, key, fst=0, lst=3):
+@annotate(fst='int', lst='int', arr='doublep')
+def quicksort(arr, fst=0, lst=3):
     """
     Sort in-place with QuickSort
     Thanks https://stackoverflow.com/a/31102672
@@ -1572,8 +1574,6 @@ def quicksort(arr, key, fst=0, lst=3):
     ----------
     arr : list
         Array to be sorted.
-    key : list
-        Values in the increasing order of which `arr` will be sorted.
     fst : int
         The index of the first element from arr and key to begin sorting from.
         Must be in the range [0, len(xs)).
@@ -1587,17 +1587,16 @@ def quicksort(arr, key, fst=0, lst=3):
         return
 
     i, j = fst, lst
-    pivot = key[lst]
+    pivot = arr[lst]
 
     while i <= j:
-        while key[i] < pivot:
+        while arr[i] < pivot:
             i += 1
-        while key[j] > pivot:
+        while arr[j] > pivot:
             j -= 1
 
         if i <= j:
-            key[i], key[j] = key[j], key[i]
             arr[i], arr[j] = arr[j], arr[i]
             i, j = i + 1, j - 1
-    quicksort(arr, key, fst, j)
-    quicksort(arr, key, i, lst)
+    quicksort(arr, fst, j)
+    quicksort(arr, i, lst)
