@@ -425,14 +425,18 @@ class UpdateSmoothingLength(Equation):
         nidx = declare('matrix(500, "long")')
         for i in range(N_NBRS):
             s_idx = NBRS[i]
-
             xij[0] = d_x[d_idx] - s_x[s_idx]
             xij[1] = d_y[d_idx] - s_y[s_idx]
             xij[2] = d_z[d_idx] - s_z[s_idx]
             rij[i] = sqrt(xij[0] * xij[0] + xij[1] * xij[1] + xij[2] * xij[2])
             nidx[i] = s_idx
         quicksort(nidx, rij, 0, N_NBRS - 1)
-        d_h[d_idx] = rij[ndes] / SPH_KERNEL.radius_scale
+
+        # Scheme recommends using (ndes + 1)th rij. The min() used below is
+        # just an extra precaution. Btw, index of (ndes + 1)th element is ndes
+        # as indexing starts from 0.
+        i = min(ndes, N_NBRS - 1)
+        d_h[d_idx] = rij[i] / SPH_KERNEL.radius_scale
 
 
 class SummationDensityMPMStyle(Equation):
@@ -1158,9 +1162,11 @@ class MomentumAndEnergyMI1(Equation):
         hi = self.fkern * d_h[d_idx]
         hj = self.fkern * s_h[s_idx]
 
-        for row in range(dim):
+        for row in range(3):
             gmi[row] = 0.0
             gmj[row] = 0.0
+
+        for row in range(dim):
             etai[row] = XIJ[row] / hi
             etaj[row] = XIJ[row] / hj
 
