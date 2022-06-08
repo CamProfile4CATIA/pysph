@@ -29,13 +29,11 @@ gamma1 = gamma - 1.0
 dt = 5e-3
 tf = 1.
 
-
 # domain size
 xmin = 0.
 xmax = 1.
 ymin = 0.
 ymax = 1.
-
 
 # scheme constants
 alpha1 = 1.0
@@ -81,7 +79,7 @@ class AccuracyTest2D(Application):
         global dx
         data = ud.uniform_distribution_cubic2D(
             self.dx, xmin, xmax, ymin, ymax
-            )
+        )
 
         x = data[0].ravel()
         y = data[1].ravel()
@@ -106,7 +104,7 @@ class AccuracyTest2D(Application):
         v = numpy.ones_like(x) * self.v
 
         # thermal energy from the ideal gas EOS
-        e = p/(gamma1*rho)
+        e = p / (gamma1 * rho)
 
         fluid = gpa(name='fluid', x=x, y=y, rho=rho, p=p, e=e, h=h, m=m,
                     h0=h.copy(), u=u, v=v)
@@ -155,7 +153,7 @@ class AccuracyTest2D(Application):
 
         magma2 = MAGMA2Scheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            hfact=kernel_factor, adaptive_h_scheme='mpm'
+            hfact=None, has_ghosts=True, ndes=50
         )
 
         s = SchemeChooser(
