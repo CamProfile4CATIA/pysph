@@ -407,8 +407,8 @@ class UpdateSmoothingLength(Equation):
     """
     Sorts neighbours based on distance and uses the distance of nearest
     :math:`(n_{des} + 1)^{th}` particle to set the smoothing length. Here,
-    :math:`n_{des}` is the desired number of number of neighbours to be in the
-    kernel support of each particle.
+    :math:`n_{des}` is the desired number of neighbours to be in the kernel
+    support of each particle.
     """
 
     def __init__(self, dest, sources, ndes):
