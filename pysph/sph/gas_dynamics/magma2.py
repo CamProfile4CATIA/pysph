@@ -134,16 +134,8 @@ class MAGMA2Scheme(Scheme):
         self.adaptive_h_scheme = adaptive_h_scheme
         self.formulation = formulation
         self.reconstruction_order = reconstruction_order
-
-        if adaptive_h_scheme == 'mpm' and hfact is None:
-            raise ValueError("hfact should be specified if smoothing lengths "
-                             "are to be adapted by MPM procedure.")
-        elif adaptive_h_scheme == 'magma2' and ndes is None:
-            raise ValueError("ndes should be specified if smoothing lengths "
-                             "are to be adapted by MAGMA2 procedure.")
-        else:
-            self.hfact = hfact
-            self.ndes = ndes
+        self.hfact = hfact
+        self.ndes = ndes
 
     def add_user_options(self, group):
         group.add_argument("--adaptive-h", action="store",
@@ -242,48 +234,58 @@ class MAGMA2Scheme(Scheme):
 
         equations = []
         if self.adaptive_h_scheme == "magma2":
-            g1p0 = []
-            for fluid in self.fluids:
-                g1p0.append(IncreaseSmoothingLength(dest=fluid, sources=None))
-            equations.append(Group(equations=g1p0))
+            if self.ndes is None:
+                raise ValueError(
+                    "ndes should be specified if smoothing lengths "
+                    "are to be adapted by MAGMA2 procedure.")
+            else:
+                g1p0 = []
+                for fluid in self.fluids:
+                    g1p0.append(IncreaseSmoothingLength(dest=fluid,
+                                                        sources=None))
+                equations.append(Group(equations=g1p0))
 
-            g1p1 = []
-            for fluid in self.fluids:
-                g1p1.append(UpdateSmoothingLength(dest=fluid, sources=all_pa,
-                                                  ndes=self.ndes))
-            equations.append(Group(equations=g1p1))
+                g1p1 = []
+                for fluid in self.fluids:
+                    g1p1.append(UpdateSmoothingLength(dest=fluid,
+                                                      sources=all_pa,
+                                                      ndes=self.ndes))
+                equations.append(Group(equations=g1p1))
 
-            g2 = []
-            from pysph.sph.basic_equations import SummationDensity
-            for fluid in self.fluids:
-                g2.append(SummationDensity(dest=fluid, sources=all_pa))
-                g2.append(IdealGasEOS(dest=fluid, sources=None,
-                                      gamma=self.gamma))
-                if self.reconstruction_order > 1:
-                    g2.append(AuxiliaryGradient(dest=fluid, sources=all_pa,
-                                                dim=self.dim))
-            equations.append(Group(equations=g2))
+                g2 = []
+                from pysph.sph.basic_equations import SummationDensity
+                for fluid in self.fluids:
+                    g2.append(SummationDensity(dest=fluid, sources=all_pa))
+                    g2.append(IdealGasEOS(dest=fluid, sources=None,
+                                          gamma=self.gamma))
+                    if self.reconstruction_order > 1:
+                        g2.append(AuxiliaryGradient(dest=fluid, sources=all_pa,
+                                                    dim=self.dim))
+                equations.append(Group(equations=g2))
 
         elif self.adaptive_h_scheme == "mpm":
-            g1 = []
-            for fluid in self.fluids:
-                g1.append(SummationDensityMPMStyle(
-                    dest=fluid, sources=all_pa, hfact=self.hfact,
-                    density_iterations=True, dim=self.dim,
-                    htol=self.density_iteration_tolerance))
-                equations.append(
-                    Group(equations=g1, update_nnps=True, iterate=True,
-                          max_iterations=self.max_density_iterations))
+            if self.hfact is None:
+                raise ValueError("hfact should be specified if smoothing "
+                                 "lengths are to be adapted by MPM procedure.")
+            else:
+                g1 = []
+                for fluid in self.fluids:
+                    g1.append(SummationDensityMPMStyle(
+                        dest=fluid, sources=all_pa, hfact=self.hfact,
+                        density_iterations=True, dim=self.dim,
+                        htol=self.density_iteration_tolerance))
+                    equations.append(
+                        Group(equations=g1, update_nnps=True, iterate=True,
+                              max_iterations=self.max_density_iterations))
 
-            g2 = []
-            for fluid in self.fluids:
-                g2.append(IdealGasEOS(dest=fluid, sources=None,
-                                      gamma=self.gamma))
-                if self.reconstruction_order > 1:
-                    g2.append(AuxiliaryGradient(dest=fluid, sources=all_pa,
-                                                dim=self.dim))
-            equations.append(Group(equations=g2))
-
+                g2 = []
+                for fluid in self.fluids:
+                    g2.append(IdealGasEOS(dest=fluid, sources=None,
+                                          gamma=self.gamma))
+                    if self.reconstruction_order > 1:
+                        g2.append(AuxiliaryGradient(dest=fluid, sources=all_pa,
+                                                    dim=self.dim))
+                equations.append(Group(equations=g2))
         else:
             raise ValueError("adaptive_h_scheme must be one of: "
                              "%r." % self.h_scheme_choices)
