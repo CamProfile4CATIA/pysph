@@ -1310,6 +1310,9 @@ class MomentumAndEnergyMI2(Equation):
             etai[row] = XIJ[row] / hi
             etaj[row] = XIJ[row] / hj
 
+        for row in range(3):
+            gmij[row] = 0.0
+
         # Limiter
         etaisq = dot(etai, etai, dim)
         etajsq = dot(etaj, etaj, dim)
