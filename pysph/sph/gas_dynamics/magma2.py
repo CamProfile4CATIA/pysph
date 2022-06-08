@@ -43,11 +43,11 @@ class MAGMA2Scheme(Scheme):
     Dissipation Limiter: [Rosswog2020a]_
     """
 
-    def __init__(self, fluids, solids, dim, gamma, hfact=1.2, fkern=1.0,
+    def __init__(self, fluids, solids, dim, gamma, hfact=None, fkern=1.0,
                  adaptive_h_scheme='magma2', max_density_iterations=250,
                  density_iteration_tolerance=1e-3, alphamax=1.0, alphamin=0.1,
                  alphac=0.05, beta=2.0, eps=0.01, eta_crit=0.3, eta_fold=0.2,
-                 ndes=300, reconstruction_order=2, formulation='mi1',
+                 ndes=None, reconstruction_order=2, formulation='mi1',
                  recycle_accelerations=True, has_ghosts=False):
         """
         Parameters
@@ -119,7 +119,6 @@ class MAGMA2Scheme(Scheme):
         self.solver = None
         self.gamma = gamma
         self.beta = beta
-        self.hfact = hfact
         self.density_iteration_tolerance = density_iteration_tolerance
         self.max_density_iterations = max_density_iterations
         self.has_ghosts = has_ghosts
@@ -135,6 +134,16 @@ class MAGMA2Scheme(Scheme):
         self.adaptive_h_scheme = adaptive_h_scheme
         self.formulation = formulation
         self.reconstruction_order = reconstruction_order
+
+        if adaptive_h_scheme == 'mpm' and hfact is None:
+            raise ValueError("hfact should be specified if smoothing lengths "
+                             "are to be adapted by MPM procedure.")
+        elif adaptive_h_scheme == 'magma2' and ndes is None:
+            raise ValueError("ndes should be specified if smoothing lengths "
+                             "are to be adapted by MAGMA2 procedure.")
+        else:
+            self.hfact = hfact
+            self.ndes = ndes
 
     def add_user_options(self, group):
         group.add_argument("--adaptive-h", action="store",
