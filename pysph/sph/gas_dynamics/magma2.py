@@ -356,12 +356,11 @@ class MAGMA2Scheme(Scheme):
         particle_arrays = dict([(p.name, p) for p in particles])
 
         props = ['rho', 'm', 'x', 'y', 'z', 'u', 'v', 'w', 'h', 'cs', 'p', 'e',
-                 'au', 'av', 'aw', 'ae', 'pid', 'gid', 'tag', 'dwdh', 'h0',
-                 'converged', 'ah', 'arho', 'dt_cfl', 'e0', 'rho0', 'u0', 'v0',
-                 'w0', 'x0', 'y0', 'z0']
-        more_props = ['n', 'dndh', 'prevn', 'prevdndh', 'divv', 'an', 'n0',
-                      'alpha0', 'aalpha', 'tilmu', 'dt_adapt', 'prevdrhosumdh',
-                      'drhosumdh']
+                 'au', 'av', 'aw', 'ae', 'pid', 'gid', 'tag', 'dwdh',
+                 'converged', 'ah', 'arho', 'dt_cfl', 'u0', 'v0', 'w0']
+        more_props = ['n', 'dndh', 'prevn', 'prevdndh', 'divv', 'an', 'h0',
+                      'aalpha', 'tilmu', 'dt_adapt', 'aalpha0', 'ae0', 'ah0',
+                      'an0', 'arho0', 'au0', 'av0', 'aw0']
         props.extend(more_props)
         output_props = 'm rho p u v w x y z e n divv h alpha'.split(' ')
         for fluid in self.fluids:
@@ -1431,64 +1430,74 @@ class TVDRK2Step(IntegratorStep):
     integrator step.
     """
 
-    def initialize(self, d_idx, d_x0, d_y0, d_z0, d_x, d_y, d_z, d_h, d_u0,
-                   d_v0, d_w0, d_u, d_v, d_w, d_e, d_e0, d_h0, d_converged,
-                   d_rho, d_rho0, d_n, d_n0, d_alpha, d_alpha0):
-        d_x0[d_idx] = d_x[d_idx]
-        d_y0[d_idx] = d_y[d_idx]
-        d_z0[d_idx] = d_z[d_idx]
-
+    def initialize(self, d_idx, d_u0, d_v0, d_w0, d_u, d_v, d_w, d_converged,
+                   d_au0, d_av0, d_aw0, d_ae0, d_ah0, d_arho0, d_an0,
+                   d_aalpha0, d_au, d_av, d_aw, d_ae, d_ah, d_arho, d_an,
+                   d_aalpha):
         d_u0[d_idx] = d_u[d_idx]
         d_v0[d_idx] = d_v[d_idx]
         d_w0[d_idx] = d_w[d_idx]
 
-        d_e0[d_idx] = d_e[d_idx]
+        d_au0[d_idx] = d_au[d_idx]
+        d_av0[d_idx] = d_av[d_idx]
+        d_aw0[d_idx] = d_aw[d_idx]
 
-        d_h0[d_idx] = d_h[d_idx]
-        d_rho0[d_idx] = d_rho[d_idx]
-        d_n0[d_idx] = d_n[d_idx]
-        d_alpha0[d_idx] = d_alpha[d_idx]
+        d_ae0[d_idx] = d_ae[d_idx]
+
+        d_ah0[d_idx] = d_ah[d_idx]
+        d_arho0[d_idx] = d_arho[d_idx]
+        d_an0[d_idx] = d_an[d_idx]
+        d_aalpha0[d_idx] = d_aalpha[d_idx]
 
         # set the converged attribute to 0 at the beginning of a Group
         d_converged[d_idx] = 0
 
-    def stage1(self, d_idx, d_x0, d_y0, d_z0, d_x, d_y, d_z, d_u0, d_v0, d_w0,
-               d_u, d_v, d_w, d_e0, d_e, d_au, d_av, d_aw, d_ae, d_rho, d_rho0,
-               d_arho, d_h, d_h0, d_ah, dt, d_n, d_n0, d_an, d_alpha, d_alpha0,
-               d_aalpha):
-        d_u[d_idx] = d_u0[d_idx] + dt * d_au[d_idx]
-        d_v[d_idx] = d_v0[d_idx] + dt * d_av[d_idx]
-        d_w[d_idx] = d_w0[d_idx] + dt * d_aw[d_idx]
+    def stage1(self, d_idx, d_x, d_y, d_z, d_u, d_v, d_w, d_e, d_au, d_av,
+               d_aw, d_ae, d_rho, d_arho, d_h, d_ah, dt, d_n, d_an, d_alpha,
+               d_aalpha, d_h0):
+        d_x[d_idx] += dt * d_u[d_idx]
+        d_y[d_idx] += dt * d_v[d_idx]
+        d_z[d_idx] += dt * d_w[d_idx]
 
-        d_x[d_idx] = d_x0[d_idx] + dt * d_u[d_idx]
-        d_y[d_idx] = d_y0[d_idx] + dt * d_v[d_idx]
-        d_z[d_idx] = d_z0[d_idx] + dt * d_w[d_idx]
+        d_u[d_idx] += dt * d_au[d_idx]
+        d_v[d_idx] += dt * d_av[d_idx]
+        d_w[d_idx] += dt * d_aw[d_idx]
 
         # update thermal energy
-        d_e[d_idx] = d_e0[d_idx] + dt * d_ae[d_idx]
+        d_e[d_idx] += dt * d_ae[d_idx]
 
         # predict density and smoothing lengths for faster
         # convergence. NNPS need not be explicitly updated since it
         # will be called at the end of the predictor stage.
-        d_h[d_idx] = d_h0[d_idx] + dt * d_ah[d_idx]
-        d_rho[d_idx] = d_rho0[d_idx] + dt * d_arho[d_idx]
-        d_n[d_idx] = d_n0[d_idx] + dt * d_an[d_idx]
-        d_alpha[d_idx] = d_alpha0[d_idx] + dt * d_aalpha[d_idx]
+        d_h0[d_idx] = d_h[d_idx]
+        d_h[d_idx] += dt * d_ah[d_idx]
+        d_rho[d_idx] += dt * d_arho[d_idx]
+        d_n[d_idx] += dt * d_an[d_idx]
+        d_alpha[d_idx] += dt * d_aalpha[d_idx]
 
-    def stage2(self, d_idx, d_x0, d_y0, d_z0, d_x, d_y, d_z, d_u0, d_v0, d_w0,
-               d_u, d_v, d_w, d_e0, d_e, d_au, d_av, d_aw, d_ae, dt, d_alpha,
-               d_alpha0, d_aalpha, d_h, d_tilmu, d_cs, d_dt_adapt):
-        d_u[d_idx] = 0.5 * (d_u[d_idx] + d_u0[d_idx] + dt * d_au[d_idx])
-        d_v[d_idx] = 0.5 * (d_v[d_idx] + d_v0[d_idx] + dt * d_av[d_idx])
-        d_w[d_idx] = 0.5 * (d_w[d_idx] + d_w0[d_idx] + dt * d_aw[d_idx])
+    def stage2(self, d_idx, d_x, d_y, d_z, d_u0, d_v0, d_w0, d_u, d_v, d_w,
+               d_e, d_au, d_av, d_aw, d_ae, dt, d_alpha, d_aalpha, d_h,
+               d_tilmu, d_cs, d_dt_adapt, d_au0, d_av0, d_aw0, d_aalpha0,
+               d_ae0, d_h0, d_ah0, d_ah, d_arho, d_arho0, d_an, d_an0,
+               d_rho, d_n):
+        dtb2 = 0.5 * dt
 
-        d_x[d_idx] = 0.5 * (d_x[d_idx] + d_x0[d_idx] + dt * d_u[d_idx])
-        d_y[d_idx] = 0.5 * (d_y[d_idx] + d_y0[d_idx] + dt * d_v[d_idx])
-        d_z[d_idx] = 0.5 * (d_z[d_idx] + d_z0[d_idx] + dt * d_w[d_idx])
+        d_x[d_idx] += dtb2 * (d_u[d_idx] - d_u0[d_idx])
+        d_y[d_idx] += dtb2 * (d_v[d_idx] - d_v0[d_idx])
+        d_z[d_idx] += dtb2 * (d_w[d_idx] - d_w0[d_idx])
 
-        d_e[d_idx] = 0.5 * (d_e[d_idx] + d_e0[d_idx] + dt * d_ae[d_idx])
-        d_alpha[d_idx] = 0.5 * (d_alpha[d_idx] + d_alpha0[d_idx] +
-                                dt * d_aalpha[d_idx])
+        d_u[d_idx] += dtb2 * (d_au[d_idx] - d_au0[d_idx])
+        d_v[d_idx] += dtb2 * (d_av[d_idx] - d_av0[d_idx])
+        d_w[d_idx] += dtb2 * (d_aw[d_idx] - d_aw0[d_idx])
+
+        d_e[d_idx] += dtb2 * (d_ae[d_idx] - d_ae0[d_idx])
+        d_alpha[d_idx] += dtb2 * (d_aalpha[d_idx] - d_aalpha0[d_idx])
+
+        d_h0[d_idx] = d_h[d_idx]
+        d_h[d_idx] += dtb2 * (d_ah[d_idx] - d_ah0[d_idx])
+        d_rho[d_idx] += dtb2 * (d_arho[d_idx] - d_arho0[d_idx])
+        d_n[d_idx] += dtb2 * (d_an[d_idx] - d_an0[d_idx])
+        d_alpha[d_idx] += dtb2 * (d_aalpha[d_idx] - d_aalpha0[d_idx])
 
         # For adaptive time-stepping
         fmag = sqrt(d_au[d_idx] * d_au[d_idx] + d_av[d_idx] * d_av[d_idx] +
@@ -1504,13 +1513,25 @@ class TVDRK2Step(IntegratorStep):
 class TVDRK2Integrator(Integrator):
     r"""
     Total variation diminishing (TVD) second-order Runge–Kutta (RK2)
-    integrator. The system is advanced using:
+    integrator. Prescribed equations in [Rosswog2020b]_ are,
 
     .. math::
 
-        y^{*} = y^n + \Delta t f(y^{n})
+        y^{*} = y^n + \Delta t f(y^{n}) --> Predict
 
-        y^{n+1} = 0.5 (y^n + y^{*} + \Delta t f(y^{*}))
+        y^{n+1} = 0.5 (y^n + y^{*} + \Delta t f(y^{*})) --> Evaluate
+
+    This is not suitable to be used with periodic boundaries. Say, if
+    a particle crosses the left boundary at the predict step,
+    `update_domain()` will introduce that particle at the right boundary.
+    Afterwards, the evaluate step essentially averages the positions and the
+    particle ends up near the mid-point. To do away with this issue, the
+    evaluate equation is changed to,
+
+    .. math::
+
+        y^{n+1} = y^{*} + 0.5 * \Delta t (f(y^{*}) - f(y^{n}))
+
     """
 
     def one_timestep(self, t, dt):
@@ -1543,6 +1564,17 @@ class TVDRK2IntegratorWithRecycling(Integrator):
         y^{*,n} = y^n + \Delta t f(y^{*,n-1})
 
         y^{n+1} = 0.5 (y^n + y^{*} + \Delta t f(y^{*,n}))
+
+    This is not suitable to be used with periodic boundaries. Say, if
+    a particle crosses the left boundary at the predict step,
+    `update_domain()` will introduce that particle at the right boundary.
+    Afterwards, the evaluate step essentially averages the positions and the
+    particle ends up near the mid-point. To do away with this issue, the
+    evaluate equation is changed to,
+
+    .. math::
+
+        y^{n+1} = y^{*} + 0.5 * \Delta t (f(y^{*,n}) - f(y^{*,n-1}))
     """
 
     def one_timestep(self, t, dt):
