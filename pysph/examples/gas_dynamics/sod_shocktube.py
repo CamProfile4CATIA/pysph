@@ -88,7 +88,7 @@ class SodShockTube(ShockTubeSetup):
         scheme = self.scheme
         if self.options.scheme in ['gsph', 'mpm']:
             scheme.configure(kernel_factor=self.hdx)
-        elif self.options.scheme in ['psph', 'tsph', 'magma2']:
+        elif self.options.scheme in ['psph', 'tsph']:
             scheme.configure(hfact=self.hdx)
         scheme.configure_solver(tf=self.tf, dt=self.dt)
 
@@ -126,7 +126,7 @@ class SodShockTube(ShockTubeSetup):
 
         magma2 = MAGMA2Scheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            hfact=None, has_ghosts=True, ndes=7
+            has_ghosts=True, ndes=7
         )
 
         s = SchemeChooser(

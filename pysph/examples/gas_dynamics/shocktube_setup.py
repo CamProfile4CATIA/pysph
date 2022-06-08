@@ -172,3 +172,6 @@ class ShockTubeSetup(Application):
             s.configure(hfact=kernel_factor)
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
+        elif self.options.scheme == 'magma2':
+            s.configure_solver(dt=self.dt, tf=self.tf,
+                               adaptive_timestep=False, pfreq=1)
