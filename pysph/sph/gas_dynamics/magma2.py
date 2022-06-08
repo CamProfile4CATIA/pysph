@@ -43,11 +43,11 @@ class MAGMA2Scheme(Scheme):
     Dissipation Limiter: [Rosswog2020a]_
     """
 
-    def __init__(self, fluids, solids, dim, gamma, hfact, formulation='mi1',
+    def __init__(self, fluids, solids, dim, gamma, hfact=1.2, fkern=1.0,
                  adaptive_h_scheme='magma2', max_density_iterations=250,
                  density_iteration_tolerance=1e-3, alphamax=1.0, alphamin=0.1,
                  alphac=0.05, beta=2.0, eps=0.01, eta_crit=0.3, eta_fold=0.2,
-                 fkern=1.0, ndes=300, reconstruction_order=2,
+                 ndes=300, reconstruction_order=2, formulation='mi1',
                  recycle_accelerations=True, has_ghosts=False):
         """
         Parameters
@@ -952,13 +952,16 @@ class UpdateGhostProps(Equation):
         assert GHOST_TAG == 2
 
     def initialize(self, d_idx, d_orig_idx, d_p, d_tag, d_h, d_rho, d_dndh,
-                   d_n, d_cm, d_dv, d_dvaux, d_ddv, d_dde, d_de, d_deaux):
+                   d_n, d_cm, d_dv, d_dvaux, d_ddv, d_dde, d_de, d_deaux,
+                   d_cs, d_alpha):
         idx, dim, dimsq, row, col, rowcol, blk = declare('int', 7)
         blkrowcol, dsi2, si2, drowcol, srowcol = declare('int', 5)
         if d_tag[d_idx] == 2:
             idx = d_orig_idx[d_idx]
             d_p[d_idx] = d_p[idx]
             d_h[d_idx] = d_h[idx]
+            d_cs[d_idx] = d_cs[idx]
+            d_alpha[d_idx] = d_alpha[idx]
             d_rho[d_idx] = d_rho[idx]
             d_dndh[d_idx] = d_dndh[idx]
             d_n[d_idx] = d_n[idx]
