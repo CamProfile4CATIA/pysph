@@ -235,9 +235,9 @@ class MAGMA2Scheme(Scheme):
         equations = []
         if self.adaptive_h_scheme == "magma2":
             if self.ndes is None:
-                raise ValueError(
-                    "ndes should be specified if smoothing lengths "
-                    "are to be adapted by MAGMA2 procedure.")
+                raise ValueError("ndes should be specified if smoothing "
+                                 "lengths are to be adapted by MAGMA2 "
+                                 "procedure.")
             else:
                 g1p0 = []
                 for fluid in self.fluids:
@@ -316,7 +316,7 @@ class MAGMA2Scheme(Scheme):
 
         g4 = []
         for solid in self.solids:
-            g4.append(WallBoundary(solid, sources=self.fluids))
+            g4.append(WallBoundary(solid, sources=self.fluids, dim=self.dim))
         equations.append(Group(equations=g4))
 
         if self.has_ghosts:
@@ -398,11 +398,16 @@ class MAGMA2Scheme(Scheme):
             pa.orig_idx[:] = numpy.arange(nfp)
             pa.set_output_arrays(output_props)
 
-        solid_props = set(props) | set('m0 wij htmp'.split(' '))
+        solid_props = set(props) | set('wij htmp alpha rho0'.split(' '))
         for solid in self.solids:
             pa = particle_arrays[solid]
             self._ensure_properties(pa, solid_props, clean)
             pa.set_output_arrays(output_props)
+            pa.add_property('cm', stride=9, data=0.0)
+            pa.add_property('ddv', stride=27, data=0.0)
+            pa.add_property('de', stride=3, data=0.0)
+            pa.add_property('dde', stride=9, data=0.0)
+            pa.add_property('dv', stride=9, data=0.0)
 
 
 class IncreaseSmoothingLength(Equation):
@@ -410,7 +415,7 @@ class IncreaseSmoothingLength(Equation):
     Increase smoothing length by 10%.
     """
 
-    def post_loop(self, d_idx, d_h):
+    def initialize(self, d_idx, d_h):
         d_h[d_idx] *= 1.10
 
 
@@ -444,22 +449,23 @@ class UpdateSmoothingLength(Equation):
             rij[i] = sqrt(xij[0] * xij[0] + xij[1] * xij[1] + xij[2] * xij[2])
         quicksort(rij, 0, N_NBRS - 1)
 
-        # Scheme recommends using (ndes + 1)th rij. The min() used below is
-        # just an extra precaution. Btw, index of (ndes + 1)th element is ndes
-        # as indexing starts from 0.
-        i = min(ndes, N_NBRS - 1)
-        d_h[d_idx] = rij[i] / SPH_KERNEL.radius_scale
+        if N_NBRS > 1:
+            # Scheme recommends using (ndes + 1)th rij. The min() used below
+            # is just an extra precaution. Btw, index of (ndes + 1)th element
+            # is ndes as indexing starts from 0.
+            i = min(ndes, N_NBRS - 1)
+            d_h[d_idx] = rij[i] / SPH_KERNEL.radius_scale
 
 
 class SummationDensityMPMStyle(Equation):
+    """
+    :class:`SummationDensity
+    <pysph.sph.gas_dynamics.basic.SummationDensity>` modified to use
+    number density and without grad-h terms.
+    """
+
     def __init__(self, dest, sources, dim, density_iterations=False,
                  iterate_only_once=False, hfact=1.2, htol=1e-6):
-        """
-        :class:`SummationDensity
-        <pysph.sph.gas_dynamics.basic.SummationDensity>` modified to use
-        number density and without grad-h terms.
-        """
-
         self.density_iterations = density_iterations
         self.iterate_only_once = iterate_only_once
         self.dim = dim
@@ -887,20 +893,32 @@ class EntropyBasedDissipationTrigger(Equation):
 
 
 class WallBoundary(Equation):
+    """:class:`WallBoundary
+    <pysph.sph.gas_dynamics.boundary_equations.WallBoundary>` modified
+    for GADGET2.
     """
-        :class:`WallBoundary
-        <pysph.sph.gas_dynamics.boundary_equations.WallBoundary>` modified
-        for GADGET2.
 
-    """
+    def __init__(self, dest, sources, dim):
+        self.dim = dim
+        self.dimsq = dim * dim
+        self.dimcu = self.dimsq * dim
+        super().__init__(dest, sources)
 
     def initialize(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_h, d_htmp, d_h0,
-                   d_u, d_v, d_w, d_wij, d_n, d_dndh, d_divv, d_m0):
+                   d_u, d_v, d_w, d_wij, d_n, d_dndh, d_divv, d_alpha, d_ddv,
+                   d_dv, d_de, d_cm, d_dde, d_rho0):
+        i, dim, dimsq, dimcu, dsi1, dsi2, dsi3 = declare('int', 7)
+        dim = self.dim
+        dimsq = self.dimsq
+        dimcu = self.dimcu
+        dsi1 = d_idx * dim
+        dsi2 = d_idx * dimsq
+        dsi3 = d_idx * dimcu
         d_p[d_idx] = 0.0
         d_u[d_idx] = 0.0
         d_v[d_idx] = 0.0
         d_w[d_idx] = 0.0
-        d_m0[d_idx] = d_m[d_idx]
+        d_rho0[d_idx] = d_rho[d_idx]
         d_m[d_idx] = 0.0
         d_rho[d_idx] = 0.0
         d_e[d_idx] = 0.0
@@ -911,10 +929,35 @@ class WallBoundary(Equation):
         d_htmp[d_idx] = 0.0
         d_n[d_idx] = 0.0
         d_dndh[d_idx] = 0.0
+        d_alpha[d_idx] = 0.0
 
-    def loop(self, d_idx, s_idx, d_p, d_rho, d_e, d_m, d_cs, d_divv, d_h, d_u,
-             d_v, d_w, d_wij, d_htmp, s_p, s_rho, s_e, s_m, s_cs, s_h, s_divv,
-             s_u, s_v, s_w, WI, s_n, d_n, s_dndh, d_dndh):
+        for i in range(dim):
+            d_de[dsi1 + i] = 0.0
+
+        for i in range(dimsq):
+            d_dv[dsi2 + i] = 0.0
+            d_cm[dsi2 + i] = 0.0
+            d_dde[dsi2 + i] = 0.0
+
+        for i in range(dimcu):
+            d_ddv[dsi3 + i] = 0.0
+
+    def loop(self, d_idx, s_idx, d_p, d_rho, d_e, d_m, d_cs, d_divv, d_u, d_v,
+             d_w, d_wij, d_htmp, s_p, s_rho, s_e, s_m, s_cs, s_h, s_divv, s_u,
+             s_v, s_w, WI, s_n, d_n, s_dndh, d_dndh, d_alpha, s_alpha, d_de,
+             s_de, d_dv, d_cm, d_dde, s_dv, s_cm, s_dde, s_ddv, d_ddv):
+
+        i, dim, dimsq, dimcu = declare('int', 4)
+        dsi1, dsi2, dsi3, ssi1, ssi2, ssi3 = declare('int', 6)
+        dim = self.dim
+        dimsq = self.dimsq
+        dimcu = self.dimcu
+        dsi1 = d_idx * dim
+        dsi2 = d_idx * dimsq
+        dsi3 = d_idx * dimcu
+        ssi1 = s_idx * dim
+        ssi2 = s_idx * dimsq
+        ssi3 = s_idx * dimcu
         d_wij[d_idx] += WI
         d_p[d_idx] += s_p[s_idx] * WI
         d_u[d_idx] -= s_u[s_idx] * WI
@@ -928,9 +971,29 @@ class WallBoundary(Equation):
         d_htmp[d_idx] += s_h[s_idx] * WI
         d_n[d_idx] += s_n[s_idx] * WI
         d_dndh[d_idx] += s_dndh[s_idx] * WI
+        d_alpha[d_idx] += s_alpha[s_idx] * WI
+
+        for i in range(dim):
+            d_de[dsi1 + i] -= s_de[ssi1 + i] * WI
+
+        for i in range(dimsq):
+            d_dv[dsi2 + i] -= s_dv[ssi2 + i] * WI
+            d_cm[dsi2 + i] += s_cm[ssi2 + i] * WI
+            d_dde[dsi2 + i] += s_dde[ssi2 + i] * WI
+
+        for i in range(dimcu):
+            d_ddv[dsi3 + i] += s_ddv[ssi3 + i] * WI
 
     def post_loop(self, d_idx, d_p, d_rho, d_e, d_m, d_cs, d_divv, d_h, d_u,
-                  d_v, d_w, d_wij, d_htmp, d_n, d_dndh, d_m0):
+                  d_v, d_w, d_wij, d_htmp, d_n, d_dndh, d_de, d_dv, d_cm,
+                  d_dde, d_ddv, d_rho0):
+        i, dim, dimsq, dimcu, dsi1, dsi2, dsi3 = declare('int', 7)
+        dim = self.dim
+        dimsq = self.dimsq
+        dimcu = self.dimcu
+        dsi1 = d_idx * dim
+        dsi2 = d_idx * dimsq
+        dsi3 = d_idx * dimcu
         if d_wij[d_idx] > 1e-30:
             d_p[d_idx] = d_p[d_idx] / d_wij[d_idx]
             d_u[d_idx] = d_u[d_idx] / d_wij[d_idx]
@@ -945,18 +1008,29 @@ class WallBoundary(Equation):
             d_n[d_idx] = d_n[d_idx] / d_wij[d_idx]
             d_dndh[d_idx] = d_dndh[d_idx] / d_wij[d_idx]
 
-        # Secret Sauce
-        if d_m[d_idx] < 1e-10:
-            d_m[d_idx] = d_m0[d_idx]
+            for i in range(dim):
+                d_de[dsi1 + i] = d_de[dsi1 + i] / d_wij[d_idx]
+            for i in range(dimsq):
+                d_dv[dsi2 + i] = d_dv[dsi2 + i] / d_wij[d_idx]
+                d_cm[dsi2 + i] = d_cm[dsi2 + i] / d_wij[d_idx]
+                d_dde[dsi2 + i] = d_dde[dsi2 + i] / d_wij[d_idx]
+
+            for i in range(dimcu):
+                d_ddv[dsi3 + i] = d_ddv[dsi3 + i] / d_wij[d_idx]
+
+        # Rho appears in denominator of correction matrix and elsewhere, so it
+        # should not be zero.
+        if abs(d_rho[d_idx]) < 1e-10:
+            d_rho[d_idx] = d_rho0[d_idx]
 
 
 class UpdateGhostProps(Equation):
+    """
+    :class:`MPMUpdateGhostProps
+    <pysph.sph.gas_dynamics.basic.MPMUpdateGhostProps>` modified for GADGET2.
+    """
+
     def __init__(self, dest, dim, sources=None):
-        """
-        :class:`MPMUpdateGhostProps
-        <pysph.sph.gas_dynamics.basic.MPMUpdateGhostProps>` modified
-        for GADGET2
-        """
         super().__init__(dest, sources)
         self.dim = dim
         self.dimsq = dim * dim
@@ -1076,8 +1150,7 @@ class MomentumAndEnergyStdGrad(Equation):
             ddvdeldel[row] = 0.0
             dvdel[row] = 0.0
 
-            # [(\partial_j v^i) \delta^j]_a -
-            # [(\partial_j v^i) \delta^j]_b
+            # [(\partial_j v^i) \delta^j]_a - [(\partial_j v^i) \delta^j]_b
             dedel -= (d_de[d_idx * dim + row] + s_de[s_idx * dim + row]) * \
                      mpinc[col]
 
@@ -1214,8 +1287,7 @@ class MomentumAndEnergyMI1(Equation):
             ddvdeldel[row] = 0.0
             dvdel[row] = 0.0
 
-            # [(\partial_j v^i) \delta^j]_a -
-            # [(\partial_j v^i) \delta^j]_b
+            # [(\partial_j v^i) \delta^j]_a - [(\partial_j v^i) \delta^j]_b
             dedel -= (d_de[d_idx * dim + row] + s_de[s_idx * dim + row]) * \
                      mpinc[col]
 
@@ -1356,8 +1428,7 @@ class MomentumAndEnergyMI2(Equation):
             ddvdeldel[row] = 0.0
             dvdel[row] = 0.0
 
-            # [(\partial_j v^i) \delta^j]_a -
-            # [(\partial_j v^i) \delta^j]_b
+            # [(\partial_j v^i) \delta^j]_a - [(\partial_j v^i) \delta^j]_b
             dedel -= (d_de[d_idx * dim + row] + s_de[s_idx * dim + row]) * \
                      mpinc[col]
 
@@ -1471,7 +1542,7 @@ class TVDRK2Step(IntegratorStep):
 
     def stage1(self, d_idx, d_x, d_y, d_z, d_u, d_v, d_w, d_e, d_au, d_av,
                d_aw, d_ae, d_rho, d_arho, d_h, d_ah, dt, d_n, d_an, d_alpha,
-               d_aalpha, d_h0):
+               d_aalpha, d_h0, d_converged):
         d_x[d_idx] += dt * d_u[d_idx]
         d_y[d_idx] += dt * d_v[d_idx]
         d_z[d_idx] += dt * d_w[d_idx]
@@ -1491,6 +1562,7 @@ class TVDRK2Step(IntegratorStep):
         d_rho[d_idx] += dt * d_arho[d_idx]
         d_n[d_idx] += dt * d_an[d_idx]
         d_alpha[d_idx] += dt * d_aalpha[d_idx]
+        d_converged[d_idx] = 0
 
     def stage2(self, d_idx, d_x, d_y, d_z, d_u0, d_v0, d_w0, d_u, d_v, d_w,
                d_e, d_au, d_av, d_aw, d_ae, dt, d_alpha, d_aalpha, d_h,
@@ -1536,14 +1608,14 @@ class TVDRK2Integrator(Integrator):
 
         y^{*} = y^n + \Delta t f(y^{n}) --> Predict
 
-        y^{n+1} = 0.5 (y^n + y^{*} + \Delta t f(y^{*})) --> Evaluate
+        y^{n+1} = 0.5 (y^n + y^{*} + \Delta t f(y^{*})) --> Correct
 
     This is not suitable to be used with periodic boundaries. Say, if
-    a particle crosses the left boundary at the predict step,
+    a particle crosses the left boundary at the prediction step,
     `update_domain()` will introduce that particle at the right boundary.
-    Afterwards, the evaluate step essentially averages the positions and the
+    Afterwards, the correction step essentially averages the positions and the
     particle ends up near the mid-point. To do away with this issue, the
-    evaluate equation is changed to,
+    equation for the correction step is changed to,
 
     .. math::
 
@@ -1583,11 +1655,11 @@ class TVDRK2IntegratorWithRecycling(Integrator):
         y^{n+1} = 0.5 (y^n + y^{*} + \Delta t f(y^{*,n}))
 
     This is not suitable to be used with periodic boundaries. Say, if
-    a particle crosses the left boundary at the predict step,
+    a particle crosses the left boundary at the prediction step,
     `update_domain()` will introduce that particle at the right boundary.
-    Afterwards, the evaluate step essentially averages the positions and the
+    Afterwards, the correction step essentially averages the positions and the
     particle ends up near the mid-point. To do away with this issue, the
-    evaluate equation is changed to,
+    equation for correction step is changed to,
 
     .. math::
 
