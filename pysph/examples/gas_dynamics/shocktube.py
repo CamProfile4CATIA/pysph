@@ -18,6 +18,7 @@ from pysph.sph.scheme import GasDScheme, ADKEScheme, GSPHScheme, SchemeChooser
 from pysph.sph.wc.crksph import CRKSPHScheme
 from pysph.sph.gas_dynamics.psph import PSPHScheme
 from pysph.sph.gas_dynamics.tsph import TSPHScheme
+from pysph.sph.gas_dynamics.magma2 import MAGMA2Scheme
 
 # PySPH tools
 from pysph.tools import uniform_distribution as ud
@@ -158,9 +159,14 @@ class ShockTube2D(Application):
             hfact=kernel_factor
         )
 
+        magma2 = MAGMA2Scheme(
+            fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
+            ndes=30, has_ghosts=True
+        )
+
         s = SchemeChooser(
             default='adke', adke=adke, mpm=mpm, gsph=gsph, crksph=crksph,
-            psph=psph, tsph=tsph
+            psph=psph, tsph=tsph, magma2=magma2
         )
         return s
 
@@ -181,6 +187,9 @@ class ShockTube2D(Application):
                                adaptive_timestep=False, pfreq=50)
         elif self.options.scheme in ['tsph', 'psph']:
             s.configure(hfact=kernel_factor)
+            s.configure_solver(dt=self.dt, tf=self.tf,
+                               adaptive_timestep=False, pfreq=50)
+        elif self.options.scheme == 'magma2':
             s.configure_solver(dt=self.dt, tf=self.tf,
                                adaptive_timestep=False, pfreq=50)
 
