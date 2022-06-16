@@ -144,6 +144,10 @@ class MAGMA2Scheme(Scheme):
                            help="Specify scheme for adaptive smoothing "
                                 "lengths: %s" % self.h_scheme_choices)
 
+        group.add_argument("--h-fact", action="store", type=float,
+                           dest="hfact", default=None,
+                           help="h_fact for smoothing length adaptivity.")
+
         group.add_argument("--formulation", action="store", dest="formulation",
                            default=None, choices=self.formulation_choices,
                            help="Specify the set of governing equations for "
@@ -181,7 +185,8 @@ class MAGMA2Scheme(Scheme):
 
     def consume_user_options(self, options):
         vars = ['gamma', 'alphamax', 'beta', 'adaptive_h_scheme', 'ndes',
-                'recycle_accelerations', 'formulation', 'reconstruction_order']
+                'recycle_accelerations', 'formulation', 'hfact',
+                'reconstruction_order']
         data = dict((var, self._smart_getattr(options, var)) for var in vars)
         self.configure(**data)
 
@@ -408,6 +413,8 @@ class MAGMA2Scheme(Scheme):
             pa.add_property('de', stride=3, data=0.0)
             pa.add_property('dde', stride=9, data=0.0)
             pa.add_property('dv', stride=9, data=0.0)
+            pa.add_property('dvaux', stride=9, data=0.0)
+            pa.add_property('deaux', stride=3, data=0.0)
 
 
 class IncreaseSmoothingLength(Equation):
