@@ -1154,26 +1154,26 @@ class MomentumAndEnergyStdGrad(Equation):
         dedel = 0.0
         ddedel = 0.0
         for row in range(dim):
-            ddvdeldel[row] = 0.0
             dvdel[row] = 0.0
+            ddvdeldel[row] = 0.0
 
-            # [(\partial_j v^i) \delta^j]_a - [(\partial_j v^i) \delta^j]_b
+            # [(\partial_j e) \delta^j]_a - [(\partial_j e) \delta^j]_b
             dedel -= (d_de[d_idx * dim + row] + s_de[s_idx * dim + row]) * \
-                     mpinc[col]
+                     mpinc[row]
 
             for col in range(dim):
                 rowcol = row * dim + col
 
-                # [(\partial_l \partial_m e) \delta^l \delta^m]_a -
-                # [(\partial_l \partial_m e) \delta^l \delta^m]_b
+                # [(\partial_j v^i) \delta^j]_a - [(\partial_j v^i) \delta^j]_b
                 dvdel[row] -= (d_dv[dsi2 + rowcol] + s_dv[ssi2 + rowcol]) * \
                               mpinc[col]
+
+                # [(\partial_l \partial_m e) \delta^l \delta^m]_a -
+                # [(\partial_l \partial_m e) \delta^l \delta^m]_b
                 ddedel += (d_dde[dsi2 + rowcol] - s_dde[ssi2 + rowcol]) * \
                           mpinc[row] * mpinc[col]
 
-        for blk in range(dim):
-            for row in range(dim):
-                for col in range(dim):
+                for blk in range(dim):
                     blkrowcol = dimsq * blk + row * dim + col
 
                     # [(\partial_l \partial_m v^i) \delta^l \delta^m]_a -
@@ -1291,26 +1291,26 @@ class MomentumAndEnergyMI1(Equation):
         dedel = 0.0
         ddedel = 0.0
         for row in range(dim):
-            ddvdeldel[row] = 0.0
             dvdel[row] = 0.0
+            ddvdeldel[row] = 0.0
 
-            # [(\partial_j v^i) \delta^j]_a - [(\partial_j v^i) \delta^j]_b
+            # [(\partial_j e) \delta^j]_a - [(\partial_j e) \delta^j]_b
             dedel -= (d_de[d_idx * dim + row] + s_de[s_idx * dim + row]) * \
-                     mpinc[col]
+                     mpinc[row]
 
             for col in range(dim):
                 rowcol = row * dim + col
 
-                # [(\partial_l \partial_m e) \delta^l \delta^m]_a -
-                # [(\partial_l \partial_m e) \delta^l \delta^m]_b
+                # [(\partial_j v^i) \delta^j]_a - [(\partial_j v^i) \delta^j]_b
                 dvdel[row] -= (d_dv[dsi2 + rowcol] + s_dv[ssi2 + rowcol]) * \
                               mpinc[col]
+
+                # [(\partial_l \partial_m e) \delta^l \delta^m]_a -
+                # [(\partial_l \partial_m e) \delta^l \delta^m]_b
                 ddedel += (d_dde[dsi2 + rowcol] - s_dde[ssi2 + rowcol]) * \
                           mpinc[row] * mpinc[col]
 
-        for blk in range(dim):
-            for row in range(dim):
-                for col in range(dim):
+                for blk in range(dim):
                     blkrowcol = dimsq * blk + row * dim + col
 
                     # [(\partial_l \partial_m v^i) \delta^l \delta^m]_a -
@@ -1328,7 +1328,7 @@ class MomentumAndEnergyMI1(Equation):
             gmij = 0.5 * (gmi[row] + gmj[row])
             sm += gmij * gmij
             vij[row] = VIJ[row] + phiij * (dvdel[row] + 0.5 * ddvdeldel[row])
-        normgmij = sqrt(sm)
+        normgmij = 0.5 * sqrt(sm)
         eij = d_e[d_idx] - s_e[s_idx] + phiij * (dedel + 0.5 * ddedel)
 
         # Artificial viscosity
@@ -1350,9 +1350,11 @@ class MomentumAndEnergyMI1(Equation):
 
         # Accelerations for the thermal energy
         vijdotdwi = dot(VIJ, gmi, dim)
-        d_ae[d_idx] -= self.alphac * s_m[
-            s_idx] * vsigng * eij * normgmij * RHOIJ1
-        d_ae[d_idx] += mjpibyrhoisq * vijdotdwi  # artificial conduction
+        d_ae[d_idx] += mjpibyrhoisq * vijdotdwi
+
+        # artificial conduction
+        d_ae[d_idx] -= self.alphac * s_m[s_idx] * vsigng * eij * normgmij *\
+                       RHOIJ1
 
 
 class MomentumAndEnergyMI2(Equation):
@@ -1432,26 +1434,26 @@ class MomentumAndEnergyMI2(Equation):
         dedel = 0.0
         ddedel = 0.0
         for row in range(dim):
-            ddvdeldel[row] = 0.0
             dvdel[row] = 0.0
+            ddvdeldel[row] = 0.0
 
-            # [(\partial_j v^i) \delta^j]_a - [(\partial_j v^i) \delta^j]_b
+            # [(\partial_j e) \delta^j]_a - [(\partial_j e) \delta^j]_b
             dedel -= (d_de[d_idx * dim + row] + s_de[s_idx * dim + row]) * \
-                     mpinc[col]
+                     mpinc[row]
 
             for col in range(dim):
                 rowcol = row * dim + col
 
-                # [(\partial_l \partial_m e) \delta^l \delta^m]_a -
-                # [(\partial_l \partial_m e) \delta^l \delta^m]_b
+                # [(\partial_j v^i) \delta^j]_a - [(\partial_j v^i) \delta^j]_b
                 dvdel[row] -= (d_dv[dsi2 + rowcol] + s_dv[ssi2 + rowcol]) * \
                               mpinc[col]
+
+                # [(\partial_l \partial_m e) \delta^l \delta^m]_a -
+                # [(\partial_l \partial_m e) \delta^l \delta^m]_b
                 ddedel += (d_dde[dsi2 + rowcol] - s_dde[ssi2 + rowcol]) * \
                           mpinc[row] * mpinc[col]
 
-        for blk in range(dim):
-            for row in range(dim):
-                for col in range(dim):
+                for blk in range(dim):
                     blkrowcol = dimsq * blk + row * dim + col
 
                     # [(\partial_l \partial_m v^i) \delta^l \delta^m]_a -
