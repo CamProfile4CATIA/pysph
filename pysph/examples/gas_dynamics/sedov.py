@@ -77,12 +77,13 @@ class SedovPointExplosion(Application):
             hfact=kernel_factor
         )
 
+        # Reconstruction does not work with this initial condition and
+        # initial distribution combination.
         magma2 = MAGMA2Scheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            ndes=30, reconstruction_order=0
+            ndes=40, reconstruction_order=0
         )
 
-        # TODO: Make this work with reconstruction order 2.
         s = SchemeChooser(
             default='mpm', mpm=mpm, psph=psph, tsph=tsph, magma2=magma2
         )
