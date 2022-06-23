@@ -97,7 +97,7 @@ class Blastwave(ShockTubeSetup):
 
         magma2 = MAGMA2Scheme(
             fluids=['fluid'], solids=['boundary'], dim=dim, gamma=gamma,
-            ndes=7)
+            ndes=7, recycle_accelerations=False)
 
         s = SchemeChooser(default='adke', adke=adke, gsph=gsph,
                           psph=psph, tsph=tsph, magma2=magma2)
