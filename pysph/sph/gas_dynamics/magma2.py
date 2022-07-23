@@ -1081,11 +1081,7 @@ class UpdateGhostProps(Equation):
                                                               blkrowcol]
 
 
-class MomentumAndEnergyStdGrad(Equation):
-    """Standard Gradient formulation (stdGrad) momentum and energy equations 
-    with artificial viscosity and artificial conductivity from [Rosswog2020b]_
-    """
-
+class MomentumAndEnergy(Equation):
     def __init__(self, dest, sources, dim, fkern, eta_crit=0.3, eta_fold=0.2,
                  beta=2.0, alphac=0.05, eps=0.01):
         self.beta = beta
@@ -1106,6 +1102,12 @@ class MomentumAndEnergyStdGrad(Equation):
         d_av[d_idx] = 0.0
         d_aw[d_idx] = 0.0
         d_ae[d_idx] = 0.0
+
+
+class MomentumAndEnergyStdGrad(MomentumAndEnergy):
+    """Standard Gradient formulation (stdGrad) momentum and energy equations
+    with artificial viscosity and artificial conductivity from [Rosswog2020b]_
+    """
 
     def loop(self, d_idx, s_idx, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho, d_au,
              d_av, d_aw, d_ae, XIJ, VIJ, d_alpha, s_alpha, d_ddv, s_ddv,
@@ -1208,36 +1210,17 @@ class MomentumAndEnergyStdGrad(Equation):
 
         # Accelerations for the thermal energy
         vijdotdwi = dot(VIJ, DWI, dim)
-        d_ae[d_idx] -= self.alphac * s_m[
-            s_idx] * vsigng * eij * normdwij * RHOIJ1
-        d_ae[d_idx] += mjpibyrhoisq * vijdotdwi  # artificial conduction
+        d_ae[d_idx] += mjpibyrhoisq * vijdotdwi
+
+        # artificial conduction
+        d_ae[d_idx] -= self.alphac * s_m[s_idx] * vsigng * eij * normdwij * \
+                       RHOIJ1
 
 
-class MomentumAndEnergyMI1(Equation):
+class MomentumAndEnergyMI1(MomentumAndEnergy):
     """Matrix inversion formulation 1 (MI1) momentum and energy equations with
     artificial viscosity and artificial conductivity from [Rosswog2020b]_
     """
-
-    def __init__(self, dest, sources, dim, fkern, eta_crit=0.3, eta_fold=0.2,
-                 beta=2.0, alphac=0.05, eps=0.01):
-        self.beta = beta
-        self.dim = dim
-        self.fkern = fkern
-        self.dimsq = dim * dim
-        self.eta_crit = eta_crit
-        self.eta_fold = eta_fold
-        self.alphac = alphac
-        self.epssq = eps * eps
-        super().__init__(dest, sources)
-
-    def _get_helpers_(self):
-        return [dot]
-
-    def initialize(self, d_idx, d_au, d_av, d_aw, d_ae):
-        d_au[d_idx] = 0.0
-        d_av[d_idx] = 0.0
-        d_aw[d_idx] = 0.0
-        d_ae[d_idx] = 0.0
 
     def loop(self, d_idx, s_idx, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho, d_au,
              d_av, d_aw, d_ae, XIJ, VIJ, d_alpha, s_alpha, d_ddv, s_ddv,
@@ -1353,35 +1336,14 @@ class MomentumAndEnergyMI1(Equation):
         d_ae[d_idx] += mjpibyrhoisq * vijdotdwi
 
         # artificial conduction
-        d_ae[d_idx] -= self.alphac * s_m[s_idx] * vsigng * eij * normgmij *\
+        d_ae[d_idx] -= self.alphac * s_m[s_idx] * vsigng * eij * normgmij * \
                        RHOIJ1
 
 
-class MomentumAndEnergyMI2(Equation):
+class MomentumAndEnergyMI2(MomentumAndEnergy):
     """Matrix inversion formulation 2 (MI2) momentum and energy equations with
     artificial viscosity and artificial conductivity from [Rosswog2020b]_
     """
-
-    def __init__(self, dest, sources, dim, fkern, eta_crit=0.3, eta_fold=0.2,
-                 beta=2.0, alphac=0.05, eps=0.01):
-        self.beta = beta
-        self.dim = dim
-        self.fkern = fkern
-        self.dimsq = dim * dim
-        self.eta_crit = eta_crit
-        self.eta_fold = eta_fold
-        self.alphac = alphac
-        self.epssq = eps * eps
-        super().__init__(dest, sources)
-
-    def _get_helpers_(self):
-        return [dot]
-
-    def initialize(self, d_idx, d_au, d_av, d_aw, d_ae):
-        d_au[d_idx] = 0.0
-        d_av[d_idx] = 0.0
-        d_aw[d_idx] = 0.0
-        d_ae[d_idx] = 0.0
 
     def loop(self, d_idx, s_idx, s_m, d_p, s_p, d_cs, s_cs, d_rho, s_rho, d_au,
              d_av, d_aw, d_ae, XIJ, VIJ, d_alpha, s_alpha, d_ddv, s_ddv,
