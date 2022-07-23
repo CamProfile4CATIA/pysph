@@ -97,3 +97,58 @@ def get_number_density_hcp(dx, dy, kernel, h0):
         wij_sum += kernel.kernel( [xij, yij, zij], rij, h0 )
                 
     return wij_sum
+
+def generate_bcc3D(a, xmin, xmax, ymin, ymax, zmin, zmax):
+    """Body centered packing arrangement in 3D"""
+    # a = side of unit cell
+    #
+    # | z
+    # |
+    # |_________x
+    # \
+    #  \
+    #   \y
+    #
+    dx = dy = a
+    dz = 0.5 * a
+    dxb2 = 0.5 * dx
+    dyb2 = 0.5 * dy
+    dzb2 = 0.5 * dz
+
+    # since we will be shifting each alternate layer by dxb2 and dyb2, we use
+    # xstart as dx/4 and dy/4
+    xstart = xmin + 0.5 * dxb2
+    ystart = xmin + 0.5 * dyb2
+    zstart = zmin + dzb2
+
+    # create the points
+    x, y, z = numpy.mgrid[xstart:xmax:dx, ystart:ymax:dy, zstart:zmax:dz]
+
+    # each alternate layer is shifted
+    x[:, :, ::2] += dxb2
+    y[:, :, ::2] += dyb2
+
+    print(f'BCC packing domain: {xmin = }, {xmax = }, {ymin = }, {ymax = },'
+          f' {zmin = }, {zmax = }')
+
+    print(f'BCC packing particles: {x.min() = }, {x.max() = }, {y.min() = }, '
+          f'{y.max() = }, {z.min() = }, {z.max() = }')
+
+    print(f'Particle spacings: \n'
+          f'{numpy.min(x[:, :, 1] - x[:, :, 0]) = }, \n'
+          f'{numpy.min(y[:, :, 1] - y[:, :, 0]) = }, \n'
+          f'{numpy.min(z[:, :, 1] - z[:, :, 0]) = }')
+
+    print(f'Offsets: \n'
+          f'{x.min() - xmin = } \n'
+          f'{y.min() - ymin = } \n'
+          f'{z.min() - zmin = } \n'
+          f'{x.max() - xmax = } \n'
+          f'{y.max() - ymax = } \n'
+          f'{z.max() - zmax = }')
+
+    x = x.ravel()
+    y = y.ravel()
+    z = z.ravel()
+
+    return x, y, z
