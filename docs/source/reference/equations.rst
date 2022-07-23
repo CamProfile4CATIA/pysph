@@ -105,7 +105,8 @@ MAGMA2
              CorrectionMatrix, FirstGradient, SecondGradient,
              EntropyBasedDissipationTrigger, WallBoundary, UpdateGhostProps
              MomentumAndEnergyMI1, MomentumAndEnergyMI2,
-             MomentumAndEnergyStdGrad, EvaluateTildeMu
+             MomentumAndEnergyStdGrad, EvaluateTildeMu,
+             SettleByArtificialPressure
    :undoc-members:
    :member-order: bysource
 
