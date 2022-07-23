@@ -14,7 +14,8 @@ from pysph.base.nnps import DomainManager
 from pysph.base.utils import get_particle_array as gpa
 from pysph.solver.application import Application
 
-from pysph.sph.scheme import GasDScheme, ADKEScheme, GSPHScheme, SchemeChooser
+from pysph.sph.scheme import (GasDScheme, ADKEScheme, GSPHScheme,
+                              SchemeChooser, add_bool_argument)
 from pysph.sph.wc.crksph import CRKSPHScheme
 from pysph.sph.gas_dynamics.psph import PSPHScheme
 from pysph.sph.gas_dynamics.tsph import TSPHScheme
@@ -68,6 +69,13 @@ class ShockTube2D(Application):
         self.vl = 0.
         self.vr = 0.
 
+    def add_user_options(self, group):
+        add_bool_argument(group, 'smooth-ic', dest='smooth_ic', default=False,
+                          help="Smooth the initial condition.")
+
+    def consume_user_options(self):
+        self.smooth_ic = self.options.smooth_ic
+
     def create_domain(self):
         return DomainManager(
             xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax,
@@ -93,8 +101,12 @@ class ShockTube2D(Application):
         rho[right_indices] = self.rhor
 
         # pl = 100.0, pr = 0.1
-        p = numpy.ones_like(x) * self.pl
-        p[right_indices] = self.pr
+        if self.smooth_ic:
+            deltax = 1.5 * dx
+            p = (self.pl - self.pr) / (1 + numpy.exp((x - x0) / deltax)) + self.pr
+        else:
+            p = numpy.ones_like(x) * self.pl
+            p[right_indices] = self.pr
 
         # const h and mass
         h = numpy.ones_like(x) * self.hdx * self.dx
@@ -161,7 +173,7 @@ class ShockTube2D(Application):
 
         magma2 = MAGMA2Scheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            ndes=30, has_ghosts=True
+            ndes=40, has_ghosts=True
         )
 
         s = SchemeChooser(
