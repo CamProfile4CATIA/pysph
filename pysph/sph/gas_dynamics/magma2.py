@@ -1483,6 +1483,59 @@ class EvaluateTildeMu(Equation):
                                      R2IJ + 0.01))
 
 
+class SettleByArtificialPressure(Equation):
+    """Equation 40 of [Rosswog2020b]_ .
+    Combined with an equation to update density (and smoothing length, if
+    preferred), this equation can be evaluated through
+    :py:class:`~pysph.tools.sph_evaluator.SPHEvaluator` to settle the
+    particles and obtain an initial distribution."""
+
+    def __init__(self, dest, sources, xi=0.5, fkern=1.0):
+        self.fkern = fkern
+        self.xi = xi
+        super().__init__(dest, sources)
+
+    def initialize(self, d_deltax, d_deltay, d_deltaz, d_idx, d_n,
+                   d_pouerr):
+        d_deltax[d_idx] = 0.0
+        d_deltay[d_idx] = 0.0
+        d_deltaz[d_idx] = 0.0
+        d_n[d_idx] = 0.0
+        d_pouerr[d_idx] = 0.0  # partition of unity error
+
+    def loop(self, d_rho, d_idx, d_rhodes, s_rho, s_rhodes, s_idx,
+             d_deltax, d_deltay, d_deltaz, DWI, d_n, WI, s_m, d_pouerr):
+        cpia = max(1 + ((d_rho[d_idx] - d_rhodes[d_idx]) / d_rhodes[d_idx]),
+                   0.1)
+        cpib = max(1 + ((s_rho[s_idx] - s_rhodes[s_idx]) / s_rhodes[s_idx]),
+                   0.1)
+
+        common = (cpia + cpib) / s_rho[s_idx]
+
+        d_deltax[d_idx] += common * DWI[0]
+        d_deltay[d_idx] += common * DWI[1]
+        d_deltaz[d_idx] += common * DWI[2]
+
+        d_n[d_idx] += WI
+        d_pouerr[d_idx] += s_m[d_idx] * WI / s_rho[s_idx]
+
+    def post_loop(self, d_deltax, d_deltay, d_deltaz, d_idx, d_h, d_m,
+                  d_pouerr, d_rhodes, d_n, d_x, d_y, d_z):
+        xi = self.xi
+        hi = self.fkern * d_h[d_idx]
+        common = -xi * hi * hi * d_m[d_idx]
+        d_deltax[d_idx] *= common
+        d_deltay[d_idx] *= common
+        d_deltaz[d_idx] *= common
+
+        d_x[d_idx] += d_deltax[d_idx]
+        d_y[d_idx] += d_deltay[d_idx]
+        d_z[d_idx] += d_deltaz[d_idx]
+
+        d_pouerr[d_idx] = 1 - d_pouerr[d_idx]
+        d_m[d_idx] = d_rhodes[d_idx] / d_n[d_idx]
+
+
 class TVDRK2Step(IntegratorStep):
     """
     Total variation diminishing (TVD) second-order Runge–Kutta (RK2)
