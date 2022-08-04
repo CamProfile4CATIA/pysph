@@ -51,6 +51,12 @@ def main(argv=None):
              " xdmf file"
     )
 
+    parser.add_argument(
+        "--vectorize-velocity", action="store_true",
+        help="reference u,v and w such that the velocity is read as vector "
+             "quantity through xdmf"
+    )
+
     if len(argv) > 0 and argv[0] in ['-h', '--help']:
         parser.print_help()
         sys.exit()
@@ -69,10 +75,11 @@ def run(options):
             outfile = Path(ifile).stem + '.xdmf'
 
         files2xdmf(files, Path(options.outdir).joinpath(outfile),
-                   options.relative_path)
+                   options.relative_path, options.vectorize_velocity)
 
 
-def files2xdmf(absolute_files, outfilename, refer_relative_path):
+def files2xdmf(absolute_files, outfilename, refer_relative_path,
+               vectorize_velocity):
     times = []
     for fname in absolute_files:
         data = h5py.File(fname, 'r')  # will fail here if not .hdf5 file
@@ -83,6 +90,9 @@ def files2xdmf(absolute_files, outfilename, refer_relative_path):
     for particles_name in pa.get('arrays').keys():
         particles = pa['arrays'].get(particles_name)
         output_props = particles.output_property_arrays
+        if vectorize_velocity:
+            for component in {'u', 'v', 'w'}:
+                output_props.remove(component)
         n_particles = particles.num_real_particles
         _stride = particles.stride
         attr_type = {}
@@ -105,7 +115,7 @@ def files2xdmf(absolute_files, outfilename, refer_relative_path):
                                             'attr_type': attr_type}
 
     template_file = Path(__file__).parent.absolute().joinpath(
-        'xdmf_template.xml')
+        'xdmf_template.mako')
     xdmf_template = Template(filename=str(template_file))
 
     if refer_relative_path:
@@ -116,7 +126,8 @@ def files2xdmf(absolute_files, outfilename, refer_relative_path):
 
     with open(outfilename, 'w') as xdmf_file:
         print(xdmf_template.render(times=times, files=files,
-                                   particles_arrays=particles_arrays),
+                                   particles_arrays=particles_arrays,
+                                   vectorize_velocity=vectorize_velocity),
               file=xdmf_file)
 
 
