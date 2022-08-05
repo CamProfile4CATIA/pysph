@@ -80,20 +80,18 @@ def run(options):
 
 def files2xdmf(absolute_files, outfilename, refer_relative_path,
                vectorize_velocity):
-    times = []
-    for fname in absolute_files:
-        data = h5py.File(fname, 'r')  # will fail here if not .hdf5 file
-        times.append(data['solver_data'].attrs.get('t'))
-
+    # Assuming output_props and strides does not change for the files in a
+    # folder, just obtain those from the first file.
     pa = load(absolute_files[0])
     particles_arrays = {}
+    n_particles = {}
     for particles_name in pa.get('arrays').keys():
         particles = pa['arrays'].get(particles_name)
         output_props = particles.output_property_arrays
         if vectorize_velocity:
             for component in {'u', 'v', 'w'}:
                 output_props.remove(component)
-        n_particles = particles.num_real_particles
+        n_particles[particles_name] = []
         _stride = particles.stride
         attr_type = {}
         stride = {}
@@ -110,9 +108,15 @@ def files2xdmf(absolute_files, outfilename, refer_relative_path,
             attr_type[var_name] = typ
 
         particles_arrays[particles_name] = {'output_props': output_props,
-                                            'n_particles': n_particles,
                                             'stride': stride,
                                             'attr_type': attr_type}
+    times = []
+    for fname in absolute_files:
+        with h5py.File(fname, 'r') as data:  # will fail here if not .hdf5 file
+            times.append(data['solver_data'].attrs.get('t'))
+            for pname in data['particles'].items():
+                n_particles[pname[0]].append(
+                    data.get(f"particles/{pname[0]}/arrays/x").shape[0])
 
     template_file = Path(__file__).parent.absolute().joinpath(
         'xdmf_template.mako')
@@ -127,6 +131,7 @@ def files2xdmf(absolute_files, outfilename, refer_relative_path,
     with open(outfilename, 'w') as xdmf_file:
         print(xdmf_template.render(times=times, files=files,
                                    particles_arrays=particles_arrays,
+                                   n_particles=n_particles,
                                    vectorize_velocity=vectorize_velocity),
               file=xdmf_file)
 

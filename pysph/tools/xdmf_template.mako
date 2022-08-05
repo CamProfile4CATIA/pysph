@@ -2,26 +2,26 @@
 <!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>
 <Xdmf Version="2.0">
   <Domain>\
-    ${tempotral_collection(files, times, particles_arrays, vectorize_velocity)}\
+    ${tempotral_collection(files, times, n_particles, particles_arrays, vectorize_velocity)}\
   </Domain>
 </Xdmf>
 
-<%def name="tempotral_collection(files,times,particles_arrays, vectorize_velocity)">
+<%def name="tempotral_collection(files, times, n_particles, particles_arrays, vectorize_velocity)">
     <Grid Name="temporal" GridType="Collection" CollectionType="Temporal" >
-    % for file,time in zip(files,times):
+    % for index, (file, time) in enumerate(zip(files,times)):
       <Grid Name="spatial" GridType="Collection" CollectionType="Spatial" >
         <Time Type="Single" Value="   ${time}" />\
-        ${spatial_collection(file, particles_arrays, vectorize_velocity)}\
+        ${spatial_collection(file, index, n_particles, particles_arrays, vectorize_velocity)}\
       </Grid>
     % endfor
     </Grid>
 </%def>
 
-<%def name="spatial_collection(file,particles_arrays, vectorize_velocity)">
+<%def name="spatial_collection(file, index, n_particles, particles_arrays, vectorize_velocity)">
   % for pname, data in particles_arrays.items():
         <Grid Name="${pname}" GridType="Uniform">\
-          ${topo_and_geom(file, pname, data['n_particles'])}\
-          ${variables_data(file, pname, data['n_particles'], data['output_props'],data['stride'], data['attr_type'], vectorize_velocity)}\
+          ${topo_and_geom(file, pname, n_particles[pname][index])}\
+          ${variables_data(file, pname, n_particles[pname][index], data['output_props'],data['stride'], data['attr_type'], vectorize_velocity)}\
         </Grid>
   % endfor
 </%def>
@@ -63,5 +63,5 @@
               </DataItem>
             </DataItem>
           </Attribute>
-% endif
+  % endif
 </%def>
