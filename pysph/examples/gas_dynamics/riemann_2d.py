@@ -270,10 +270,11 @@ class Riemann2D(Application):
             hfact=1.2
         )
 
-        # TODO: Get rid of reconstruction_order=0
+        # This scheme only works with constant volume discretisation and
+        # StdGrad formulation if reconstruction order 2 is to be used.
         magma2 = MAGMA2Scheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            has_ghosts=True, ndes=30, reconstruction_order=0
+            has_ghosts=True, ndes=50, reconstruction_order=2
         )
 
         s = SchemeChooser(
