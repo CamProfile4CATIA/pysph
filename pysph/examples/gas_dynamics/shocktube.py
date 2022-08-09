@@ -103,7 +103,8 @@ class ShockTube2D(Application):
         # pl = 100.0, pr = 0.1
         if self.smooth_ic:
             deltax = 1.5 * dx
-            p = (self.pl - self.pr) / (1 + numpy.exp((x - x0) / deltax)) + self.pr
+            p = (self.pl - self.pr) / (1 + numpy.exp((x - x0) / deltax)) + \
+                self.pr
         else:
             p = numpy.ones_like(x) * self.pl
             p[right_indices] = self.pr

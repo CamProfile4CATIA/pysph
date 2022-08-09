@@ -888,8 +888,8 @@ class EntropyBasedDissipationTrigger(Equation):
         tau = self.fkern * d_h[d_idx] / d_cs[d_idx]
         epsdot = abs(d_s[d_idx] - snew) * tau / (d_s[d_idx] * dt)
         d_s[d_idx] = snew
-        l = log(epsdot)
-        x = min(max((l - self.l0) / (self.l1 - self.l0), 0.0), 1.0)
+        ll = log(epsdot)
+        x = min(max((ll - self.l0) / (self.l1 - self.l0), 0.0), 1.0)
         sx = ((6.0 * x - 15.0) * x + 10.0) * x * x * x
         alphades = self.alphamax * sx
         if d_alpha[d_idx] > alphades:
@@ -1160,20 +1160,20 @@ class MomentumAndEnergyStdGrad(MomentumAndEnergy):
             ddvdeldel[row] = 0.0
 
             # [(\partial_j e) \delta^j]_a - [(\partial_j e) \delta^j]_b
-            dedel -= (d_de[d_idx * dim + row] + s_de[s_idx * dim + row]) * \
-                     mpinc[row]
+            dedel -= (d_de[d_idx * dim + row] +
+                      s_de[s_idx * dim + row]) * mpinc[row]
 
             for col in range(dim):
                 rowcol = row * dim + col
 
                 # [(\partial_j v^i) \delta^j]_a - [(\partial_j v^i) \delta^j]_b
-                dvdel[row] -= (d_dv[dsi2 + rowcol] + s_dv[ssi2 + rowcol]) * \
-                              mpinc[col]
+                dvdel[row] -= (d_dv[dsi2 + rowcol] +
+                               s_dv[ssi2 + rowcol]) * mpinc[col]
 
                 # [(\partial_l \partial_m e) \delta^l \delta^m]_a -
                 # [(\partial_l \partial_m e) \delta^l \delta^m]_b
-                ddedel += (d_dde[dsi2 + rowcol] - s_dde[ssi2 + rowcol]) * \
-                          mpinc[row] * mpinc[col]
+                ddedel += (d_dde[dsi2 + rowcol] -
+                           s_dde[ssi2 + rowcol]) * mpinc[row] * mpinc[col]
 
                 for blk in range(dim):
                     blkrowcol = dimsq * blk + row * dim + col
@@ -1213,8 +1213,8 @@ class MomentumAndEnergyStdGrad(MomentumAndEnergy):
         d_ae[d_idx] += mjpibyrhoisq * vijdotdwi
 
         # artificial conduction
-        d_ae[d_idx] -= self.alphac * s_m[s_idx] * vsigng * eij * normdwij * \
-                       RHOIJ1
+        d_ae[d_idx] -= (self.alphac * s_m[s_idx] * vsigng * eij * normdwij *
+                        RHOIJ1)
 
 
 class MomentumAndEnergyMI1(MomentumAndEnergy):
@@ -1278,20 +1278,20 @@ class MomentumAndEnergyMI1(MomentumAndEnergy):
             ddvdeldel[row] = 0.0
 
             # [(\partial_j e) \delta^j]_a - [(\partial_j e) \delta^j]_b
-            dedel -= (d_de[d_idx * dim + row] + s_de[s_idx * dim + row]) * \
-                     mpinc[row]
+            dedel -= (d_de[d_idx * dim + row] +
+                      s_de[s_idx * dim + row]) * mpinc[row]
 
             for col in range(dim):
                 rowcol = row * dim + col
 
                 # [(\partial_j v^i) \delta^j]_a - [(\partial_j v^i) \delta^j]_b
-                dvdel[row] -= (d_dv[dsi2 + rowcol] + s_dv[ssi2 + rowcol]) * \
-                              mpinc[col]
+                dvdel[row] -= (d_dv[dsi2 + rowcol] +
+                               s_dv[ssi2 + rowcol]) * mpinc[col]
 
                 # [(\partial_l \partial_m e) \delta^l \delta^m]_a -
                 # [(\partial_l \partial_m e) \delta^l \delta^m]_b
-                ddedel += (d_dde[dsi2 + rowcol] - s_dde[ssi2 + rowcol]) * \
-                          mpinc[row] * mpinc[col]
+                ddedel += (d_dde[dsi2 + rowcol] -
+                           s_dde[ssi2 + rowcol]) * mpinc[row] * mpinc[col]
 
                 for blk in range(dim):
                     blkrowcol = dimsq * blk + row * dim + col
@@ -1336,8 +1336,8 @@ class MomentumAndEnergyMI1(MomentumAndEnergy):
         d_ae[d_idx] += mjpibyrhoisq * vijdotdwi
 
         # artificial conduction
-        d_ae[d_idx] -= self.alphac * s_m[s_idx] * vsigng * eij * normgmij * \
-                       RHOIJ1
+        d_ae[d_idx] -= (self.alphac * s_m[s_idx] * vsigng * eij * normgmij *
+                        RHOIJ1)
 
 
 class MomentumAndEnergyMI2(MomentumAndEnergy):
@@ -1400,20 +1400,20 @@ class MomentumAndEnergyMI2(MomentumAndEnergy):
             ddvdeldel[row] = 0.0
 
             # [(\partial_j e) \delta^j]_a - [(\partial_j e) \delta^j]_b
-            dedel -= (d_de[d_idx * dim + row] + s_de[s_idx * dim + row]) * \
-                     mpinc[row]
+            dedel -= (d_de[d_idx * dim + row] +
+                      s_de[s_idx * dim + row]) * mpinc[row]
 
             for col in range(dim):
                 rowcol = row * dim + col
 
                 # [(\partial_j v^i) \delta^j]_a - [(\partial_j v^i) \delta^j]_b
-                dvdel[row] -= (d_dv[dsi2 + rowcol] + s_dv[ssi2 + rowcol]) * \
-                              mpinc[col]
+                dvdel[row] -= (d_dv[dsi2 + rowcol] +
+                               s_dv[ssi2 + rowcol]) * mpinc[col]
 
                 # [(\partial_l \partial_m e) \delta^l \delta^m]_a -
                 # [(\partial_l \partial_m e) \delta^l \delta^m]_b
-                ddedel += (d_dde[dsi2 + rowcol] - s_dde[ssi2 + rowcol]) * \
-                          mpinc[row] * mpinc[col]
+                ddedel += (d_dde[dsi2 + rowcol] -
+                           s_dde[ssi2 + rowcol]) * mpinc[row] * mpinc[col]
 
                 for blk in range(dim):
                     blkrowcol = dimsq * blk + row * dim + col

@@ -1,7 +1,8 @@
 """Simulate the Sjogreen problem in 1D (10 seconds).
 """
 from pysph.examples.gas_dynamics.shocktube_setup import ShockTubeSetup
-from pysph.sph.scheme import (ADKEScheme, GasDScheme, GSPHScheme, SchemeChooser, add_bool_argument)
+from pysph.sph.scheme import (ADKEScheme, GasDScheme, GSPHScheme,
+                              SchemeChooser, add_bool_argument)
 from pysph.sph.gas_dynamics.psph import PSPHScheme
 from pysph.sph.gas_dynamics.tsph import TSPHScheme
 from pysph.sph.gas_dynamics.magma2 import MAGMA2Scheme
@@ -55,7 +56,7 @@ class SjoGreen(ShockTubeSetup):
                  "'constant_volume'}."
         )
         add_bool_argument(group, 'smooth-ic', dest='smooth_ic', default=False,
-        help = "Smooth the initial condition.")
+                          help="Smooth the initial condition.")
 
     def consume_user_options(self):
         self.nl = self.options.nl
