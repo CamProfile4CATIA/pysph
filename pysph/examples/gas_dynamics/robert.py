@@ -114,10 +114,10 @@ class Robert(ShockTubeSetup):
         )
 
         # MAGMA2 doesn't work with default parameters for this problem. Need
-        # to use --no-recycle-accelerations --timestep=0.5e-4.
+        # to use --timestep=0.5e-4.
         magma2 = MAGMA2Scheme(
             fluids=['fluid'], solids=[], dim=dim, gamma=gamma,
-            adaptive_h_scheme='mpm', hfact=1.2
+            adaptive_h_scheme='mpm', hfact=1.2, recycle_accelerations=False
         )
         s = SchemeChooser(default='adke', adke=adke, mpm=mpm, gsph=gsph,
                           psph=psph, tsph=tsph, magma2=magma2)

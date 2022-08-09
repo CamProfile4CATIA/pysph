@@ -100,11 +100,10 @@ class WallShock(ShockTubeSetup):
             hfact=1.2
         )
 
-        # MAGMA2 doesn't work with default parameters for this problem. Need
-        # to use reconstruction_order=0. May use --timestep=1e-5.
+        # Need --no-recycle-accelerations. May use --timestep=1e-5.
         magma2 = MAGMA2Scheme(
             fluids=['fluid'], solids=['boundary'], dim=dim, gamma=gamma,
-            ndes=7, reconstruction_order=0
+            ndes=7, reconstruction_order=2, recycle_accelerations=False
         )
 
         s = SchemeChooser(default='adke', adke=adke, mpm=mpm, gsph=gsph,
